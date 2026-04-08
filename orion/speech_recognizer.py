@@ -12,9 +12,9 @@ class SpeechRecognizer:
     MAX_DURATION = 10.0
 
     def __init__(self):
-        print("  Carregando modelo Whisper (small) na GPU...")
+        print("  Carregando modelo Whisper (turbo) na GPU...")
         self.model = WhisperModel(
-            "small", device="cuda", compute_type="int8_float16"
+            "turbo", device="cuda", compute_type="float16"
         )
         print("  Whisper pronto (CUDA).")
         self.silence_threshold = self._calibrate_noise()
