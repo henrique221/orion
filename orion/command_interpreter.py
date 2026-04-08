@@ -1,4 +1,5 @@
 import json
+import os
 
 import requests
 
@@ -24,6 +25,13 @@ Mapeamento:
 "fecha tudo"/"fechar tudo" → action=close_all
 "iniciar trabalhos"/"começar a trabalhar" → action=start_work
 "vai para área de trabalho 2" → action=switch_workspace, target=2
+"como está o tempo?" → action=weather, target="", args=""
+"vai chover em São Paulo?" → action=weather, target="São Paulo", args=""
+"como vai estar sexta-feira?" → action=weather, target="", args="sexta-feira"
+"tempo em Belo Horizonte amanhã?" → action=weather, target="Belo Horizonte", args="amanhã"
+"quais as notícias de hoje?" → action=news, target=""
+"notícias sobre tecnologia" → action=news, target="tecnologia"
+"o que está acontecendo na economia?" → action=news, target="economia brasil"
 "fechar orion"/"desligar orion" → action=chat, reply="Meus protocolos não permitem autodesligamento, Senhor.\""""
 
 JSON_SCHEMA = {
@@ -46,6 +54,8 @@ JSON_SCHEMA = {
                 "close_all",
                 "start_work",
                 "switch_workspace",
+                "weather",
+                "news",
                 "chat",
             ],
         },
@@ -60,15 +70,34 @@ JSON_SCHEMA = {
 class CommandInterpreter:
     OLLAMA_URL = "http://localhost:11434"
     MODEL = "llama3.2"
-    MAX_HISTORY = 20
+    MAX_HISTORY = 50
+    MEMORY_DIR = os.path.expanduser("~/.local/share/orion")
+    MEMORY_FILE = os.path.join(MEMORY_DIR, "memory.json")
 
     def __init__(self):
         self._history = []
+        self._load_memory()
         self._check_ollama()
         self._warmup()
 
-    def clear_history(self):
-        self._history = []
+    def _load_memory(self):
+        try:
+            if os.path.isfile(self.MEMORY_FILE):
+                with open(self.MEMORY_FILE, "r") as f:
+                    data = json.load(f)
+                self._history = data.get("history", [])[-self.MAX_HISTORY:]
+                print(f"  Memória carregada ({len(self._history)} mensagens).")
+        except Exception as e:
+            print(f"  Aviso: não foi possível carregar memória: {e}")
+            self._history = []
+
+    def _save_memory(self):
+        try:
+            os.makedirs(self.MEMORY_DIR, exist_ok=True)
+            with open(self.MEMORY_FILE, "w") as f:
+                json.dump({"history": self._history[-self.MAX_HISTORY:]}, f)
+        except Exception as e:
+            print(f"  Aviso: não foi possível salvar memória: {e}")
 
     def _check_ollama(self):
         try:
@@ -143,6 +172,7 @@ class CommandInterpreter:
             result = response.json()
             assistant_content = result["message"]["content"]
             self._history.append({"role": "assistant", "content": assistant_content})
+            self._save_memory()
             return json.loads(assistant_content)
         except (json.JSONDecodeError, KeyError) as e:
             print(f"  Erro ao parsear resposta do LLM: {e}")

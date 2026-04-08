@@ -422,5 +422,172 @@ class CommandExecutor:
         subprocess.run(["wmctrl", "-s", str(num)], capture_output=True)
         return _pick("switch_workspace", num=num + 1)
 
+    WEATHER_LOCATION = "Conceição da Aparecida"
+
+    WEATHER_LOADING = [
+        "Consultando satélites meteorológicos.",
+        "Acessando dados climáticos, Senhor.",
+        "Verificando as condições atmosféricas.",
+        "Coletando informações meteorológicas.",
+    ]
+
+    WEEKDAY_MAP = {
+        "segunda": 0, "terça": 1, "terca": 1,
+        "quarta": 2, "quinta": 3, "sexta": 4,
+        "sábado": 5, "sabado": 5, "domingo": 6,
+    }
+
+    def _resolve_day_index(self, day_str):
+        if not day_str:
+            return 0
+        day = day_str.strip().lower()
+        if day in ("", "hoje"):
+            return 0
+        if day in ("amanhã", "amanha"):
+            return 1
+        if day in ("depois de amanhã", "depois de amanha"):
+            return 2
+        for name, wd in self.WEEKDAY_MAP.items():
+            if name in day:
+                today_wd = datetime.datetime.now().weekday()
+                diff = (wd - today_wd) % 7
+                return diff if diff != 0 else 7
+        return 0
+
+    def _fetch_weather(self, location="", day_index=0):
+        from urllib.parse import quote
+        loc = location or self.WEATHER_LOCATION
+        url = f"https://wttr.in/{quote(loc)}?format=j1&lang=pt"
+        r = requests.get(url, timeout=10, headers={"Accept": "application/json"})
+        r.raise_for_status()
+        data = r.json()
+
+        cur = data["current_condition"][0]
+        desc_cur = cur.get("lang_pt", [{}])[0].get("value") or cur["weatherDesc"][0]["value"]
+
+        parts = [f"Local: {loc}."]
+
+        if day_index == 0:
+            parts.append(
+                f"Agora: {cur['temp_C']} graus, sensação {cur['FeelsLikeC']} graus, "
+                f"{desc_cur}, umidade {cur['humidity']}%, "
+                f"vento {cur['windspeedKmph']} km/h."
+            )
+
+        weather_days = data.get("weather", [])
+        if day_index < len(weather_days):
+            day = weather_days[day_index]
+            mid = day["hourly"][len(day["hourly"]) // 2]
+            desc_fc = mid.get("lang_pt", [{}])[0].get("value") if mid.get("lang_pt") else mid["weatherDesc"][0]["value"]
+            parts.append(
+                f"Previsão ({day['date']}): "
+                f"máxima {day['maxtempC']} graus, mínima {day['mintempC']} graus, "
+                f"{desc_fc}, chuva {mid['chanceofrain']}%. "
+                f"Nascer do sol: {day['astronomy'][0]['sunrise']}, "
+                f"pôr do sol: {day['astronomy'][0]['sunset']}."
+            )
+        elif day_index > 0:
+            parts.append(f"Previsão indisponível para {day_index} dias à frente (máximo 3 dias).")
+
+        return " ".join(parts)
+
+    def _do_weather(self, target, args):
+        try:
+            t = self._speak_async(random.choice(self.WEATHER_LOADING))
+            location = target.strip() if target else ""
+            day_index = self._resolve_day_index(args)
+            weather_data = self._fetch_weather(location, day_index)
+            if t:
+                t.join()
+
+            question = self._original_text
+            r = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "llama3.2",
+                    "prompt": (
+                        f"Dados meteorológicos: {weather_data}\n\n"
+                        f"Pergunta do usuário: \"{question}\"\n\n"
+                        "Responda em português do Brasil de forma direta e concisa, "
+                        "no tom do J.A.R.V.I.S. Foque no que foi perguntado. "
+                        "Trate o usuário por Senhor. Máximo 3 frases curtas."
+                    ),
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"temperature": 0.3, "num_predict": 80},
+                },
+                timeout=15,
+            )
+            import re
+            text = r.json()["response"].strip()
+            text = re.sub(r"[*#_~`>|]", "", text)
+            return text
+        except Exception as e:
+            print(f"  Erro ao consultar clima: {e}")
+            return "Não consegui acessar os dados meteorológicos, Senhor."
+
+    NEWS_LOADING = [
+        "Rastreando as últimas notícias, Senhor.",
+        "Acessando os canais de informação.",
+        "Consultando as fontes de notícias.",
+        "Varrendo os noticiários, Senhor.",
+    ]
+
+    AGENCIA_BRASIL_RSS = "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
+    GOOGLE_NEWS_SEARCH = "https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
+
+    def _fetch_news(self, query=""):
+        from urllib.parse import quote
+        if query:
+            rss = self.GOOGLE_NEWS_SEARCH.format(query=quote(query))
+        else:
+            rss = self.AGENCIA_BRASIL_RSS
+        url = f"https://api.rss2json.com/v1/api.json?rss_url={quote(rss, safe='')}"
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        items = data.get("items", [])[:6]
+        headlines = []
+        for i, item in enumerate(items, 1):
+            title = item.get("title", "")
+            source = item.get("author", "") or ""
+            headlines.append(f"{i}. {title}" + (f" ({source})" if source else ""))
+        return "\n".join(headlines)
+
+    def _do_news(self, target, args):
+        try:
+            t = self._speak_async(random.choice(self.NEWS_LOADING))
+            query = target.strip() if target else ""
+            headlines = self._fetch_news(query)
+            if t:
+                t.join()
+
+            question = self._original_text
+            r = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "llama3.2",
+                    "prompt": (
+                        f"Manchetes de notícias:\n{headlines}\n\n"
+                        f"Pergunta do usuário: \"{question}\"\n\n"
+                        "Você é o Orion, IA no estilo J.A.R.V.I.S. Resuma as notícias "
+                        "em português do Brasil de forma inteligente e concisa. "
+                        "Destaque o que é mais relevante para a pergunta do usuário. "
+                        "Trate-o por Senhor. Máximo 4 frases curtas e diretas."
+                    ),
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"temperature": 0.3, "num_predict": 150},
+                },
+                timeout=15,
+            )
+            import re
+            text = r.json()["response"].strip()
+            text = re.sub(r"[*#_~`>|]", "", text)
+            return text
+        except Exception as e:
+            print(f"  Erro ao consultar notícias: {e}")
+            return "Não consegui acessar os canais de notícias, Senhor."
+
     def _do_chat(self, target, args):
         return None

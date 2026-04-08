@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+import time
 
 import numpy as np
 import sounddevice as sd
@@ -24,10 +25,12 @@ class TTS:
         "~/.local/share/piper/pt_BR-faber-medium.onnx"
     )
 
-    def __init__(self):
+    def __init__(self, face=None):
         self._kokoro = None
         self._g2p = None
         self._use_piper = False
+        self.interrupted = False
+        self._face = face
 
         if os.path.isfile(self.KOKORO_MODEL) and os.path.isfile(
             self.KOKORO_VOICES
@@ -69,6 +72,10 @@ class TTS:
         else:
             self._speak_espeak(text)
 
+    INTERRUPT_THRESHOLD = 0.06
+    INTERRUPT_SAMPLE_RATE = 16000
+    INTERRUPT_CHUNK = 1600  # 100ms
+
     def _speak_kokoro(self, text):
         try:
             from scipy.signal import resample
@@ -80,14 +87,46 @@ class TTS:
             )
             new_len = int(len(samples) / self.KOKORO_PITCH_SHIFT)
             samples = resample(samples, new_len).astype(np.float32)
+            self.interrupted = False
+            if self._face:
+                from orion.face import State
+                self._face.set_state(State.SPEAKING)
             sd.play(samples, sr)
-            sd.wait()
+            self._monitor_for_interrupt(len(samples) / sr)
+            if self._face:
+                from orion.face import State
+                self._face.set_state(State.IDLE)
         except Exception as e:
             print(f"  Erro Kokoro: {e}, usando fallback.")
             if self._use_piper:
                 self._speak_piper(text)
             else:
                 self._speak_espeak(text)
+
+    def _monitor_for_interrupt(self, duration):
+        """Monitora o microfone durante a fala. Se detectar voz, para."""
+        start = time.time()
+        # Ignora o primeiro 0.3s para evitar eco do alto-falante
+        grace_period = 0.3
+        try:
+            with sd.InputStream(
+                samplerate=self.INTERRUPT_SAMPLE_RATE,
+                channels=1,
+                blocksize=self.INTERRUPT_CHUNK,
+            ) as mic:
+                while time.time() - start < duration:
+                    data, _ = mic.read(self.INTERRUPT_CHUNK)
+                    elapsed = time.time() - start
+                    if elapsed < grace_period:
+                        continue
+                    energy = np.sqrt(np.mean(data**2))
+                    if energy > self.INTERRUPT_THRESHOLD:
+                        sd.stop()
+                        self.interrupted = True
+                        print("  [Fala interrompida]")
+                        return
+        except Exception:
+            sd.wait()
 
     def _speak_piper(self, text):
         try:

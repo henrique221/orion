@@ -28,13 +28,15 @@ def main():
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    assistant.start()
-
     try:
+        assistant.start()
+
         while assistant.running:
             time.sleep(0.5)
     except KeyboardInterrupt:
         pass
+    finally:
+        assistant.stop()
 
     print("Orion encerrado.\n")
 

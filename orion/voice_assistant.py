@@ -6,6 +6,7 @@ import threading
 from orion.clap_detector import ClapDetector
 from orion.command_executor import CommandExecutor
 from orion.command_interpreter import CommandInterpreter
+from orion.face import FaceAnimator, State
 from orion.speech_recognizer import SpeechRecognizer
 from orion.tts import TTS
 from orion.wake_word_detector import WakeWordDetector
@@ -30,7 +31,8 @@ class VoiceAssistant:
         self._running = True
 
         print("\nInicializando Orion...\n")
-        self.tts = TTS()
+        self.face = FaceAnimator()
+        self.tts = TTS(face=self.face)
         self.recognizer = SpeechRecognizer()
         self.interpreter = CommandInterpreter()
         self.executor = CommandExecutor(tts=self.tts)
@@ -57,9 +59,11 @@ class VoiceAssistant:
             sys.stdout.write("\a")
             sys.stdout.flush()
             self._stop_listeners()
+            self.face.set_state(State.LISTENING)
             self.tts.speak(random.choice(LISTENING_PHRASES))
             self._conversation_loop()
         finally:
+            self.face.set_state(State.IDLE)
             if self._running:
                 self._start_listeners()
             self._lock.release()
@@ -67,13 +71,14 @@ class VoiceAssistant:
     def _conversation_loop(self):
         """Mantém a conversa ativa até o usuário ficar em silêncio."""
         while True:
+            self.face.set_state(State.LISTENING)
             text = self.recognizer.record_and_transcribe()
             if not text:
                 print("  Sem resposta, encerrando conversa.")
-                self.interpreter.clear_history()
                 return
             print(f"  Voce disse: {text}")
 
+            self.face.set_state(State.PROCESSING)
             command = self.interpreter.interpret(text)
             if not command:
                 self.tts.speak(random.choice([
@@ -93,10 +98,14 @@ class VoiceAssistant:
             if response:
                 print(f"  Resposta: {response}")
                 self.tts.speak(response)
+                if self.tts.interrupted:
+                    print("  Interrompido pelo usuário.")
+                    continue
 
             print("  Aguardando próximo comando...")
 
     def start(self):
+        self.face.setup()
         hour = datetime.datetime.now().hour
         if hour < 12:
             period = "Bom dia"
@@ -112,6 +121,7 @@ class VoiceAssistant:
     def stop(self):
         self._running = False
         self._stop_listeners()
+        self.face.cleanup()
 
     @property
     def running(self):
