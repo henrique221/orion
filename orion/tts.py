@@ -72,9 +72,10 @@ class TTS:
         else:
             self._speak_espeak(text)
 
-    INTERRUPT_THRESHOLD = 0.06
+    INTERRUPT_THRESHOLD = 0.15
     INTERRUPT_SAMPLE_RATE = 16000
     INTERRUPT_CHUNK = 1600  # 100ms
+    INTERRUPT_CONSECUTIVE = 3  # chunks consecutivos acima do threshold
 
     def _speak_kokoro(self, text):
         try:
@@ -106,8 +107,8 @@ class TTS:
     def _monitor_for_interrupt(self, duration):
         """Monitora o microfone durante a fala. Se detectar voz, para."""
         start = time.time()
-        # Ignora o primeiro 0.3s para evitar eco do alto-falante
-        grace_period = 0.3
+        grace_period = 0.5
+        consecutive = 0
         try:
             with sd.InputStream(
                 samplerate=self.INTERRUPT_SAMPLE_RATE,
@@ -116,15 +117,18 @@ class TTS:
             ) as mic:
                 while time.time() - start < duration:
                     data, _ = mic.read(self.INTERRUPT_CHUNK)
-                    elapsed = time.time() - start
-                    if elapsed < grace_period:
+                    if time.time() - start < grace_period:
                         continue
                     energy = np.sqrt(np.mean(data**2))
                     if energy > self.INTERRUPT_THRESHOLD:
-                        sd.stop()
-                        self.interrupted = True
-                        print("  [Fala interrompida]")
-                        return
+                        consecutive += 1
+                        if consecutive >= self.INTERRUPT_CONSECUTIVE:
+                            sd.stop()
+                            self.interrupted = True
+                            print("  [Fala interrompida]")
+                            return
+                    else:
+                        consecutive = 0
         except Exception:
             sd.wait()
 

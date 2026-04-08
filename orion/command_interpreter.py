@@ -47,6 +47,15 @@ Mapeamento:
 "me avisa em 30 segundos" → action=timer, target="", args="30 segundos"
 "timer de 1 hora" → action=timer, target="", args="1 hora"
 "fazer logout"/"encerrar sessão" → action=logout
+"liga a luz da varanda"/"acende a varanda" → action=smart_home, target=varanda, args=on
+"desliga a luz da varanda"/"apaga a varanda" → action=smart_home, target=varanda, args=off
+"liga a piscina"/"ativa a piscina" → action=smart_home, target=piscina, args=on
+"desliga a piscina"/"desativa a piscina" → action=smart_home, target=piscina, args=off
+
+IMPORTANTE: "fechar tudo" SEMPRE é close_all (fecha aplicativos abertos). NUNCA usar shutdown para isso. \
+"desligar"/"desligar o computador" é shutdown (desliga a máquina). São ações completamente diferentes. \
+"desliga a luz"/"apaga a luz" é smart_home (controle de casa). Nunca confundir com shutdown.
+
 "fechar orion"/"desligar orion" → action=chat, reply="Meus protocolos não permitem autodesligamento, Senhor.\""""
 
 JSON_SCHEMA = {
@@ -83,6 +92,7 @@ JSON_SCHEMA = {
                 "empty_trash",
                 "timer",
                 "logout",
+                "smart_home",
                 "chat",
             ],
         },

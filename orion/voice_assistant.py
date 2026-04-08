@@ -1,5 +1,6 @@
 import datetime
 import random
+import re
 import sys
 import threading
 
@@ -10,6 +11,12 @@ from orion.face import FaceAnimator, State
 from orion.speech_recognizer import SpeechRecognizer
 from orion.tts import TTS
 from orion.wake_word_detector import WakeWordDetector
+
+WAKE_WORD_PATTERN = re.compile(
+    r"^(?:orion|órion|orian|orião|oriom|oreon|ório|oriam|aurion|oryon)"
+    r"[,.!?\s]*",
+    re.IGNORECASE,
+)
 
 LISTENING_PHRASES = [
     "Às suas ordens, Senhor.",
@@ -51,7 +58,7 @@ class VoiceAssistant:
         self.wake_word.start()
         print("\nAguardando palmas ou \"Orion\"...\n")
 
-    def _on_activate(self):
+    def _on_activate(self, wake_text=None):
         if not self._lock.acquire(blocking=False):
             return
         try:
@@ -60,23 +67,66 @@ class VoiceAssistant:
             sys.stdout.flush()
             self._stop_listeners()
             self.face.set_state(State.LISTENING)
-            self.tts.speak(random.choice(LISTENING_PHRASES))
-            self._conversation_loop()
+
+            # Extract phrase after wake word (e.g. "orion, tá aí?" → "tá aí?")
+            initial_text = None
+            if wake_text:
+                remaining = WAKE_WORD_PATTERN.sub("", wake_text).strip()
+                if remaining:
+                    initial_text = remaining
+
+            if initial_text:
+                self._conversation_loop(initial_text=initial_text)
+            else:
+                self.tts.speak(random.choice(LISTENING_PHRASES))
+                self._conversation_loop()
         finally:
+            self._beep()
             self.face.set_state(State.IDLE)
             if self._running:
                 self._start_listeners()
             self._lock.release()
 
-    def _conversation_loop(self):
+    def _beep(self):
+        """Toca um bip curto para indicar fim da conversa."""
+        try:
+            import subprocess
+            subprocess.Popen(
+                ["paplay", "/usr/share/sounds/freedesktop/stereo/message.oga"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            sys.stdout.write("\a")
+            sys.stdout.flush()
+
+    STOP_WORDS = ("para", "pare", "parar", "chega", "dispensado")
+
+    def _conversation_loop(self, initial_text=None):
         """Mantém a conversa ativa até o usuário ficar em silêncio."""
+        first = True
         while True:
-            self.face.set_state(State.LISTENING)
-            text = self.recognizer.record_and_transcribe()
-            if not text:
-                print("  Sem resposta, encerrando conversa.")
+            if first and initial_text:
+                text = initial_text
+                first = False
+                print(f"  Voce disse: {text}")
+            else:
+                first = False
+                self.face.set_state(State.LISTENING)
+                text = self.recognizer.record_and_transcribe()
+                if not text:
+                    print("  Sem resposta, encerrando conversa.")
+                    return
+                print(f"  Voce disse: {text}")
+
+            if text.strip().lower().rstrip(".!,") in self.STOP_WORDS:
+                print("  Conversa encerrada pelo usuário.")
+                self.tts.speak(random.choice([
+                    "Entendido, Senhor.",
+                    "À disposição, Senhor.",
+                    "Estarei aqui se precisar.",
+                ]))
                 return
-            print(f"  Voce disse: {text}")
 
             self.face.set_state(State.PROCESSING)
             command = self.interpreter.interpret(text)

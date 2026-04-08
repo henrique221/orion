@@ -8,6 +8,14 @@ import time
 import requests
 
 
+IFTTT_KEY = "h0IO5AV2asEYG4fjT_SPbeimWkcqmlevMAAyaKZcYss"
+IFTTT_URL = "https://maker.ifttt.com/trigger/{event}/with/key/" + IFTTT_KEY
+
+SMART_HOME_DEVICES = {
+    "varanda": {"on": "varanda_on", "off": "varanda_off"},
+    "piscina": {"on": "piscina_on", "off": "piscina_off"},
+}
+
 APP_MAP = {
     "chrome": "google-chrome",
     "google chrome": "google-chrome",
@@ -92,6 +100,12 @@ REPLIES = {
         "Montando o restante do ambiente.",
         "Quase lá, Senhor. Finalizando configurações.",
     ],
+    "start_work_done": [
+        "Tudo pronto, Senhor. Bom trabalho.",
+        "Ambiente configurado. Bom trabalho, Senhor.",
+        "Estações operacionais. Bom trabalho, senhor Borges.",
+        "Sistemas prontos. Que seja um dia produtivo, Senhor.",
+    ],
     "switch_workspace": [
         "Área de trabalho {num}, Senhor.",
         "Alternando para área {num}.",
@@ -111,6 +125,16 @@ REPLIES = {
         "Encerrando todos os sistemas. Até breve, Senhor.",
         "Desligamento iniciado. Foi um prazer servi-lo.",
         "Protocolo de desligamento executado.",
+    ],
+    "shutdown_confirm": [
+        "Tem certeza que deseja desligar, Senhor?",
+        "Confirma o desligamento completo, Senhor?",
+        "Devo realmente encerrar todos os sistemas, Senhor?",
+    ],
+    "shutdown_cancelled": [
+        "Desligamento cancelado, Senhor.",
+        "Entendido, mantendo os sistemas ativos.",
+        "Operação abortada. Seguimos online, Senhor.",
     ],
     "restart": [
         "Reinicialização em andamento, Senhor.",
@@ -141,6 +165,20 @@ REPLIES = {
         "Cronômetro definido para {duration}, Senhor.",
         "Timer ativado. Avisarei em {duration}.",
         "Contagem regressiva iniciada: {duration}.",
+    ],
+    "smart_home_on": [
+        "Ativando {device}, Senhor.",
+        "{device} ligado.",
+        "Comando enviado. {device} online.",
+    ],
+    "smart_home_off": [
+        "Desativando {device}, Senhor.",
+        "{device} desligado.",
+        "Comando enviado. {device} offline.",
+    ],
+    "smart_home_error": [
+        "Falha ao controlar {device}, Senhor.",
+        "Não consegui acionar {device}. Verifique a conexão.",
     ],
     "logout": [
         "Encerrando sessão, Senhor.",
@@ -180,10 +218,22 @@ SAFE_COMMAND_PREFIXES = [
 class CommandExecutor:
     def __init__(self, tts=None):
         self._tts = tts
+        self._pending_shutdown = False
 
     def execute(self, command, original_text=""):
         if not command:
             return "Nenhum comando recebido."
+
+        # Handle pending shutdown confirmation
+        if self._pending_shutdown:
+            self._pending_shutdown = False
+            text = original_text.lower().strip()
+            if any(w in text for w in (
+                "sim", "confirmo", "pode", "positivo",
+                "afirmativo", "claro", "manda", "yes",
+            )):
+                return self._execute_shutdown()
+            return _pick("shutdown_cancelled")
 
         action = command.get("action", "chat")
         target = command.get("target", "")
@@ -363,6 +413,8 @@ class CommandExecutor:
         return None
 
     def _do_start_work(self, target, args):
+        self._ensure_unlocked()
+
         # Frase motivacional enquanto abre workspace 1
         quote = self._motivational_quote()
         t = self._speak_async(quote)
@@ -406,7 +458,7 @@ class CommandExecutor:
 
         if t:
             t.join()
-        return None
+        return _pick("start_work_done")
 
     def _motivational_quote(self):
         try:
@@ -639,8 +691,41 @@ class CommandExecutor:
             print(f"  Erro ao consultar notícias: {e}")
             return "Não consegui acessar os canais de notícias, Senhor."
 
+    def _is_screen_locked(self):
+        try:
+            result = subprocess.run(
+                ["busctl", "get-property", "org.freedesktop.login1",
+                 "/org/freedesktop/login1/session/auto",
+                 "org.freedesktop.login1.Session", "LockedHint"],
+                capture_output=True, text=True, timeout=3,
+            )
+            return "true" in result.stdout
+        except Exception:
+            return False
+
+    def _ensure_unlocked(self):
+        if self._is_screen_locked():
+            subprocess.run(["loginctl", "unlock-session"], capture_output=True)
+            time.sleep(1)
+        self._inhibit_suspend()
+
+    def _inhibit_suspend(self):
+        """Desativa suspensão automática e escurecimento de tela."""
+        subprocess.run(
+            ["gsettings", "set", "org.gnome.desktop.session", "idle-delay", "0"],
+            capture_output=True,
+        )
+        subprocess.run(
+            ["gsettings", "set", "org.gnome.settings-daemon.plugins.power",
+             "sleep-inactive-ac-timeout", "0"],
+            capture_output=True,
+        )
+        subprocess.run(["xset", "s", "off"], capture_output=True)
+        subprocess.run(["xset", "-dpms"], capture_output=True)
+
     def _do_unlock_screen(self, target, args):
         subprocess.run(["loginctl", "unlock-session"], capture_output=True)
+        self._inhibit_suspend()
         return _pick("unlock_screen")
 
     def _do_lock_screen(self, target, args):
@@ -652,6 +737,10 @@ class CommandExecutor:
         return _pick("lock_screen")
 
     def _do_shutdown(self, target, args):
+        self._pending_shutdown = True
+        return _pick("shutdown_confirm")
+
+    def _execute_shutdown(self):
         reply = _pick("shutdown")
         if self._tts:
             self._tts.speak(reply)
@@ -779,6 +868,23 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
         )
         return None
+
+    def _do_smart_home(self, target, args):
+        device = target.strip().lower()
+        state = args.strip().lower() if args else "on"
+        device_info = SMART_HOME_DEVICES.get(device)
+        if not device_info:
+            return f"Dispositivo '{target}' não cadastrado, Senhor."
+        event = device_info.get(state)
+        if not event:
+            return f"Ação '{args}' inválida para {target}, Senhor."
+        try:
+            r = requests.get(IFTTT_URL.format(event=event), timeout=10)
+            r.raise_for_status()
+            label = target.capitalize()
+            return _pick(f"smart_home_{state}", device=label)
+        except Exception:
+            return _pick("smart_home_error", device=target.capitalize())
 
     def _do_chat(self, target, args):
         return None

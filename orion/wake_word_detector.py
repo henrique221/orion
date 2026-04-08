@@ -1,6 +1,7 @@
 import threading
 import time
 
+import noisereduce as nr
 import numpy as np
 import sounddevice as sd
 
@@ -9,7 +10,7 @@ class WakeWordDetector:
     SAMPLE_RATE = 16000
     BLOCK_SIZE = 800  # 50ms (igual ao SpeechRecognizer)
     BUFFER_SECONDS = 3.0
-    MIN_SPEECH_SEC = 0.15
+    MIN_SPEECH_SEC = 0.25
     SILENCE_AFTER_SEC = 0.5
     COOLDOWN_SEC = 3.0
     CALIBRATION_WINDOW = 100
@@ -32,7 +33,7 @@ class WakeWordDetector:
         if len(self._noise_history) > self.CALIBRATION_WINDOW:
             self._noise_history.pop(0)
         noise_floor = np.percentile(self._noise_history, 50)
-        self._threshold = max(noise_floor * 2.5, 0.008)
+        self._threshold = max(noise_floor * 3.5, 0.01)
 
     def _audio_callback(self, indata, frames, time_info, status):
         energy = np.sqrt(np.mean(indata**2))
@@ -75,6 +76,12 @@ class WakeWordDetector:
 
     def _check(self, audio):
         try:
+            audio = nr.reduce_noise(
+                y=audio,
+                sr=self.SAMPLE_RATE,
+                prop_decrease=0.8,
+                stationary=True,
+            )
             segments, _ = self.model.transcribe(
                 audio,
                 language="pt",
@@ -99,7 +106,7 @@ class WakeWordDetector:
             )):
                 print(f"  [Wake word: \"{text}\"]")
                 self._last_activate = time.time()
-                self.on_activate()
+                self.on_activate(text)
         except Exception:
             pass
         finally:

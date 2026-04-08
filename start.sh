@@ -17,4 +17,10 @@ source .venv/bin/activate
 NVIDIA_LIBS="$SCRIPT_DIR/.venv/lib/python3.12/site-packages/nvidia"
 export LD_LIBRARY_PATH="$NVIDIA_LIBS/cublas/lib:$NVIDIA_LIBS/cudnn/lib:$NVIDIA_LIBS/cuda_nvrtc/lib:${LD_LIBRARY_PATH:-}"
 
-python main.py
+if [ -t 0 ]; then
+    python main.py
+else
+    LOG_DIR="$HOME/.local/share/orion"
+    mkdir -p "$LOG_DIR"
+    python main.py >> "$LOG_DIR/orion.log" 2>&1
+fi
