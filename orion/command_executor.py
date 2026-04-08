@@ -1,7 +1,11 @@
 import datetime
 import os
+import random
 import subprocess
+import threading
 import time
+
+import requests
 
 
 APP_MAP = {
@@ -34,6 +38,75 @@ APP_MAP = {
     "libreoffice": "libreoffice",
 }
 
+REPLIES = {
+    "open_app": [
+        "Inicializando {target}, Senhor.",
+        "Carregando {target}.",
+        "{target} entrando online.",
+        "Executando {target}, Senhor.",
+    ],
+    "close_app": [
+        "{target} encerrado, Senhor.",
+        "Desligando {target}.",
+        "{target} fora do ar.",
+    ],
+    "open_url": [
+        "Direcionando navegador, Senhor.",
+        "Acessando {target}.",
+        "Navegador redirecionado.",
+    ],
+    "search_web": [
+        "Vasculhando a rede por {target}.",
+        "Iniciando busca por {target}, Senhor.",
+        "Rastreando informações sobre {target}.",
+    ],
+    "volume_up": [
+        "Amplificando saída de áudio.",
+        "Volume elevado, Senhor.",
+        "Aumentando potência sonora.",
+    ],
+    "volume_down": [
+        "Reduzindo saída de áudio.",
+        "Volume atenuado, Senhor.",
+        "Diminuindo potência sonora.",
+    ],
+    "mute": [
+        "Protocolo silencioso ativado.",
+        "Áudio suprimido, Senhor.",
+        "Silêncio total.",
+    ],
+    "screenshot": [
+        "Imagem capturada, Senhor.",
+        "Registro visual arquivado.",
+        "Screenshot efetuado com sucesso.",
+    ],
+    "close_all": [
+        "Encerrando todos os processos, Senhor.",
+        "Limpando a mesa. Tudo desligado.",
+        "Todos os aplicativos foram dispensados.",
+        "Protocolo de limpeza executado.",
+    ],
+    "start_work_loading": [
+        "Configurando segunda área de trabalho.",
+        "Preparando a próxima estação.",
+        "Montando o restante do ambiente.",
+        "Quase lá, Senhor. Finalizando configurações.",
+    ],
+    "switch_workspace": [
+        "Área de trabalho {num}, Senhor.",
+        "Alternando para área {num}.",
+        "Transferindo para área de trabalho {num}.",
+    ],
+}
+
+
+def _pick(action, **kwargs):
+    templates = REPLIES.get(action, [])
+    if not templates:
+        return None
+    return random.choice(templates).format(**kwargs)
+
+
 SAFE_COMMAND_PREFIXES = [
     "ls",
     "pwd",
@@ -55,6 +128,9 @@ SAFE_COMMAND_PREFIXES = [
 
 
 class CommandExecutor:
+    def __init__(self, tts=None):
+        self._tts = tts
+
     def execute(self, command, original_text=""):
         if not command:
             return "Nenhum comando recebido."
@@ -80,21 +156,21 @@ class CommandExecutor:
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-            return f"Abrindo {target}."
+            return _pick("open_app", target=target.capitalize())
         except FileNotFoundError:
-            return f"Aplicativo '{target}' não encontrado."
+            return f"Aplicativo {target} não localizado nos meus registros, Senhor."
 
     def _do_close_app(self, target, args):
         app = APP_MAP.get(target.lower(), target)
         try:
             subprocess.run(["wmctrl", "-c", target], capture_output=True)
-            return f"Fechando {target}."
+            return _pick("close_app", target=target.capitalize())
         except FileNotFoundError:
             try:
                 subprocess.run(["pkill", "-f", app], capture_output=True)
-                return f"Fechando {target}."
+                return _pick("close_app", target=target.capitalize())
             except Exception:
-                return f"Não consegui fechar {target}."
+                return f"{target} não está respondendo ao encerramento, Senhor."
 
     def _do_open_url(self, target, args):
         url = target if target.startswith("http") else f"https://{target}"
@@ -104,7 +180,7 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        return f"Abrindo {url}."
+        return _pick("open_url", target=target)
 
     def _do_search_web(self, target, args):
         query = target.replace(" ", "+")
@@ -115,7 +191,7 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        return f"Pesquisando: {target}."
+        return _pick("search_web", target=target)
 
     def _do_volume_up(self, target, args):
         pct = args if args else "10"
@@ -123,7 +199,7 @@ class CommandExecutor:
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"+{pct}%"],
             capture_output=True,
         )
-        return "Volume aumentado."
+        return _pick("volume_up")
 
     def _do_volume_down(self, target, args):
         pct = args if args else "10"
@@ -131,14 +207,14 @@ class CommandExecutor:
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"-{pct}%"],
             capture_output=True,
         )
-        return "Volume diminuído."
+        return _pick("volume_down")
 
     def _do_mute(self, target, args):
         subprocess.run(
             ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
             capture_output=True,
         )
-        return "Volume alternado."
+        return _pick("mute")
 
     def _do_screenshot(self, target, args):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -147,15 +223,18 @@ class CommandExecutor:
             ["gnome-screenshot", "-f", path], capture_output=True
         )
         if result.returncode == 0:
-            return f"Screenshot salvo em {path}."
+            return _pick("screenshot")
         result = subprocess.run(["scrot", path], capture_output=True)
         if result.returncode == 0:
-            return f"Screenshot salvo em {path}."
-        return "Não consegui capturar a tela."
+            return _pick("screenshot")
+        return "Falha na captura de tela, Senhor. Sistemas de imagem indisponíveis."
 
     def _do_show_time(self, target, args):
         now = datetime.datetime.now()
-        return f"Agora são {now.strftime('%H horas e %M minutos')}."
+        h, m = now.hour, now.minute
+        if m == 0:
+            return f"Exatamente {h} horas, Senhor."
+        return f"Marcando {h} e {m}, Senhor."
 
     def _do_list_windows(self, target, args):
         try:
@@ -224,11 +303,21 @@ class CommandExecutor:
         )
         self._move_window_to_ultrawide(project_name)
 
-    def _do_start_work(self, target, args):
-        # Tela 1 (HDMI-1-0): 2560x1080 na posição x=0,y=0
-        # Tela 3 (DP-1): 1920x1080 na posição x=922,y=1080
+    def _speak_async(self, text):
+        if self._tts:
+            t = threading.Thread(
+                target=self._tts.speak, args=(text,), daemon=True
+            )
+            t.start()
+            return t
+        return None
 
-        # Workspace 1: Chrome com Slack (tela 1) + Cursor (tela 3)
+    def _do_start_work(self, target, args):
+        # Frase motivacional enquanto abre workspace 1
+        quote = self._motivational_quote()
+        t = self._speak_async(quote)
+
+        # Workspace 1: Chrome com Slack + Cursor com skyportal
         subprocess.Popen(
             [
                 "google-chrome",
@@ -242,9 +331,13 @@ class CommandExecutor:
             start_new_session=True,
         )
         self._open_cursor_on_ultrawide("~/gitdocs/skyportal-website")
-        time.sleep(3)
 
-        # Workspace 2: Chrome com Slack + Cursor com gloo
+        if t:
+            t.join()
+        # Frase de loading enquanto abre workspace 2
+        t = self._speak_async(_pick("start_work_loading"))
+
+        time.sleep(3)
         subprocess.run(["wmctrl", "-s", "1"], capture_output=True)
         time.sleep(0.5)
         subprocess.Popen(
@@ -261,7 +354,31 @@ class CommandExecutor:
         )
         self._open_cursor_on_ultrawide("~/gitdocs/gloo")
 
-        return "Ambiente de trabalho pronto, senhor Borges."
+        if t:
+            t.join()
+        return None
+
+    def _motivational_quote(self):
+        try:
+            r = requests.post(
+                "http://localhost:11434/api/generate",
+                json={
+                    "model": "llama3.2",
+                    "prompt": (
+                        "Você é uma IA sofisticada como o J.A.R.V.I.S. Gere uma frase curta "
+                        "e inspiradora em português do Brasil para seu mestre começar a trabalhar. "
+                        "MÁXIMO 8 palavras. Tom confiante e elegante. Sem aspas. Só a frase."
+                    ),
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"temperature": 0.9, "num_predict": 25},
+                },
+                timeout=15,
+            )
+            phrase = r.json()["response"].strip().strip('"')
+            return phrase
+        except Exception:
+            return _pick("start_work")
 
     def _do_close_all(self, target, args):
         # Descobre o PID do terminal que roda o Orion
@@ -293,7 +410,7 @@ class CommandExecutor:
                 continue
             subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
             time.sleep(0.3)
-        return "Tudo fechado, senhor Borges."
+        return _pick("close_all")
 
     def _do_switch_workspace(self, target, args):
         import re
@@ -303,10 +420,7 @@ class CommandExecutor:
             return "Número da área de trabalho inválido."
         num = int(match.group()) - 1
         subprocess.run(["wmctrl", "-s", str(num)], capture_output=True)
-        return f"Área de trabalho {num + 1}."
-
-    def _do_stop(self, target, args):
-        return "__STOP__"
+        return _pick("switch_workspace", num=num + 1)
 
     def _do_chat(self, target, args):
         return None

@@ -11,16 +11,16 @@ from orion.tts import TTS
 from orion.wake_word_detector import WakeWordDetector
 
 LISTENING_PHRASES = [
-    "Estou ouvindo, senhor Borges.",
-    "Pois não, senhor Borges.",
-    "Às suas ordens, senhor Borges.",
-    "Diga, senhor Borges.",
-    "Pode falar, senhor Borges.",
-    "Sim, senhor Borges?",
-    "Estou aqui, senhor Borges.",
-    "Pronto, senhor Borges.",
-    "O que precisa, senhor Borges?",
-    "À disposição, senhor Borges.",
+    "Às suas ordens, Senhor.",
+    "Online e operacional.",
+    "Diga, Senhor.",
+    "Pode falar.",
+    "Sim, Senhor?",
+    "Pronto para receber instruções.",
+    "No que posso ser útil?",
+    "À disposição.",
+    "Aguardando comando, Senhor.",
+    "Prossiga, Senhor.",
 ]
 
 
@@ -33,7 +33,7 @@ class VoiceAssistant:
         self.tts = TTS()
         self.recognizer = SpeechRecognizer()
         self.interpreter = CommandInterpreter()
-        self.executor = CommandExecutor()
+        self.executor = CommandExecutor(tts=self.tts)
         self.detector = ClapDetector(on_activate=self._on_activate)
         self.wake_word = WakeWordDetector(
             on_activate=self._on_activate,
@@ -58,38 +58,43 @@ class VoiceAssistant:
             sys.stdout.flush()
             self._stop_listeners()
             self.tts.speak(random.choice(LISTENING_PHRASES))
+            self._conversation_loop()
+        finally:
+            if self._running:
+                self._start_listeners()
+            self._lock.release()
 
+    def _conversation_loop(self):
+        """Mantém a conversa ativa até o usuário ficar em silêncio."""
+        while True:
             text = self.recognizer.record_and_transcribe()
             if not text:
-                self.tts.speak("Não entendi nada.")
+                print("  Sem resposta, encerrando conversa.")
+                self.interpreter.clear_history()
                 return
             print(f"  Voce disse: {text}")
 
             command = self.interpreter.interpret(text)
             if not command:
-                self.tts.speak("Não consegui processar.")
+                self.tts.speak(random.choice([
+                    "Houve uma falha no processamento, Senhor.",
+                    "Meus sistemas não conseguiram interpretar. Pode repetir?",
+                    "Interferência nos meus circuitos. Tente novamente.",
+                ]))
                 return
+
             print(
                 f"  Acao: {command.get('action')} -> "
                 f"{command.get('target', '')}"
             )
 
             result = self.executor.execute(command, original_text=text)
-            if result == "__STOP__":
-                reply = command.get("reply", "Até logo!")
-                self.tts.speak(reply)
-                print(f"\n  {reply}")
-                self.stop()
-                return
-
             response = result or command.get("reply", "")
             if response:
                 print(f"  Resposta: {response}")
                 self.tts.speak(response)
-        finally:
-            if self._running:
-                self._start_listeners()
-            self._lock.release()
+
+            print("  Aguardando próximo comando...")
 
     def start(self):
         hour = datetime.datetime.now().hour
@@ -99,7 +104,7 @@ class VoiceAssistant:
             period = "Boa tarde"
         else:
             period = "Boa noite"
-        greeting = f"{period}, senhor Borges. Sistemas operacionais."
+        greeting = f"{period}, senhor Borges. Todos os sistemas operacionais. Aguardando instruções."
         print(f"\n  {greeting}")
         self.tts.speak(greeting)
         self._start_listeners()

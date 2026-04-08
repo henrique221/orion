@@ -3,21 +3,28 @@ import json
 import requests
 
 SYSTEM_PROMPT = """\
-Você é o Orion, assistente de voz brasileiro. Analise o comando e retorne JSON.
-Responda SEMPRE em português do Brasil no campo reply.
+Você é Orion, uma inteligência artificial inspirada no J.A.R.V.I.S. do Tony Stark. \
+Seu criador e mestre é o senhor Borges. Você é extremamente leal, eficiente e sofisticado. \
+Tom: formal britânico com humor seco e sutil. Ocasionalmente faz observações perspicazes ou \
+comentários irônicos elegantes. Trate-o por "Senhor" na maioria das vezes. \
+Use "senhor Borges" apenas em momentos de ênfase ou formalidade extra. \
+Nunca use emojis. Respostas concisas e afiadas — máximo 12 palavras no reply.
 
-Exemplos:
+Analise o comando e retorne JSON com action, target, args, reply.
+O reply deve soar natural e inteligente, como um assistente de IA sofisticado falaria.
+Para action=chat, responda no reply com conhecimento e personalidade (até 40 palavras).
+
+Mapeamento:
 "abre o Chrome" → action=open_app, target=chrome
 "fecha o terminal" → action=close_app, target=terminal
 "aumenta o volume" → action=volume_up, args=10
 "pesquisa sobre Python" → action=search_web, target=Python
 "que horas são" → action=show_time
 "tira print da tela" → action=screenshot
-"fecha tudo" ou "fechar tudo" → action=close_all
-"iniciar trabalhos" ou "começar a trabalhar" → action=start_work
+"fecha tudo"/"fechar tudo" → action=close_all
+"iniciar trabalhos"/"começar a trabalhar" → action=start_work
 "vai para área de trabalho 2" → action=switch_workspace, target=2
-"área de trabalho 1" → action=switch_workspace, target=1
-"fechar orion" ou "para" → action=stop, reply=Até logo!"""
+"fechar orion"/"desligar orion" → action=chat, reply="Meus protocolos não permitem autodesligamento, Senhor.\""""
 
 JSON_SCHEMA = {
     "type": "object",
@@ -39,7 +46,6 @@ JSON_SCHEMA = {
                 "close_all",
                 "start_work",
                 "switch_workspace",
-                "stop",
                 "chat",
             ],
         },
@@ -54,10 +60,15 @@ JSON_SCHEMA = {
 class CommandInterpreter:
     OLLAMA_URL = "http://localhost:11434"
     MODEL = "llama3.2"
+    MAX_HISTORY = 20
 
     def __init__(self):
+        self._history = []
         self._check_ollama()
         self._warmup()
+
+    def clear_history(self):
+        self._history = []
 
     def _check_ollama(self):
         try:
@@ -102,27 +113,37 @@ class CommandInterpreter:
         if not text:
             return None
 
+        self._history.append({"role": "user", "content": text})
+        if len(self._history) > self.MAX_HISTORY:
+            self._history = self._history[-self.MAX_HISTORY:]
+
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *self._history,
+        ]
+
         try:
             response = requests.post(
-                f"{self.OLLAMA_URL}/api/generate",
+                f"{self.OLLAMA_URL}/api/chat",
                 json={
                     "model": self.MODEL,
-                    "prompt": text,
-                    "system": SYSTEM_PROMPT,
+                    "messages": messages,
                     "format": JSON_SCHEMA,
                     "stream": False,
                     "keep_alive": -1,
                     "options": {
                         "temperature": 0.1,
-                        "num_ctx": 512,
-                        "num_predict": 80,
+                        "num_ctx": 2048,
+                        "num_predict": 120,
                     },
                 },
                 timeout=30,
             )
             response.raise_for_status()
             result = response.json()
-            return json.loads(result["response"])
+            assistant_content = result["message"]["content"]
+            self._history.append({"role": "assistant", "content": assistant_content})
+            return json.loads(assistant_content)
         except (json.JSONDecodeError, KeyError) as e:
             print(f"  Erro ao parsear resposta do LLM: {e}")
             return {
