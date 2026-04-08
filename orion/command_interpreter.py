@@ -32,6 +32,21 @@ Mapeamento:
 "quais as notícias de hoje?" → action=news, target=""
 "notícias sobre tecnologia" → action=news, target="tecnologia"
 "o que está acontecendo na economia?" → action=news, target="economia brasil"
+"bloqueia o computador"/"tranca a tela"/"lock" → action=lock_screen
+"desbloqueia a tela"/"unlock"/"destrava o computador" → action=unlock_screen
+"desliga o computador"/"shutdown" → action=shutdown
+"reinicia o computador"/"restart"/"reboot" → action=restart
+"suspende o computador"/"modo dormir"/"hibernar" → action=suspend
+"aumenta o brilho" → action=brightness_up, args=10
+"diminui o brilho" → action=brightness_down, args=10
+"brilho no máximo" → action=brightness_up, args=100
+"como está a bateria?" → action=battery
+"informações do sistema"/"status do sistema" → action=system_info
+"esvazia a lixeira"/"limpa a lixeira" → action=empty_trash
+"coloca um timer de 5 minutos" → action=timer, target="", args="5 minutos"
+"me avisa em 30 segundos" → action=timer, target="", args="30 segundos"
+"timer de 1 hora" → action=timer, target="", args="1 hora"
+"fazer logout"/"encerrar sessão" → action=logout
 "fechar orion"/"desligar orion" → action=chat, reply="Meus protocolos não permitem autodesligamento, Senhor.\""""
 
 JSON_SCHEMA = {
@@ -56,6 +71,18 @@ JSON_SCHEMA = {
                 "switch_workspace",
                 "weather",
                 "news",
+                "lock_screen",
+                "unlock_screen",
+                "shutdown",
+                "restart",
+                "suspend",
+                "brightness_up",
+                "brightness_down",
+                "battery",
+                "system_info",
+                "empty_trash",
+                "timer",
+                "logout",
                 "chat",
             ],
         },

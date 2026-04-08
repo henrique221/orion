@@ -7,12 +7,12 @@ import sounddevice as sd
 
 class WakeWordDetector:
     SAMPLE_RATE = 16000
-    BLOCK_SIZE = 1600  # 100ms
+    BLOCK_SIZE = 800  # 50ms (igual ao SpeechRecognizer)
     BUFFER_SECONDS = 3.0
-    MIN_SPEECH_SEC = 0.5
-    SILENCE_AFTER_SEC = 0.6
+    MIN_SPEECH_SEC = 0.15
+    SILENCE_AFTER_SEC = 0.5
     COOLDOWN_SEC = 3.0
-    CALIBRATION_WINDOW = 50  # blocos (~5s) para calibração contínua
+    CALIBRATION_WINDOW = 100
 
     def __init__(self, on_activate, whisper_model):
         self.on_activate = on_activate
@@ -82,7 +82,7 @@ class WakeWordDetector:
                 temperature=0,
                 without_timestamps=True,
                 vad_filter=True,
-                initial_prompt="Hey Orion",
+                initial_prompt="Orion",
             )
             text = " ".join(seg.text for seg in segments).strip().lower()
 

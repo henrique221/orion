@@ -97,6 +97,56 @@ REPLIES = {
         "Alternando para área {num}.",
         "Transferindo para área de trabalho {num}.",
     ],
+    "lock_screen": [
+        "Trancando a estação, Senhor.",
+        "Bloqueio ativado. Ninguém entra sem autorização.",
+        "Protocolo de segurança ativado.",
+    ],
+    "unlock_screen": [
+        "Estação desbloqueada, Senhor.",
+        "Acesso restaurado. Bem-vindo de volta.",
+        "Protocolo de segurança desativado.",
+    ],
+    "shutdown": [
+        "Encerrando todos os sistemas. Até breve, Senhor.",
+        "Desligamento iniciado. Foi um prazer servi-lo.",
+        "Protocolo de desligamento executado.",
+    ],
+    "restart": [
+        "Reinicialização em andamento, Senhor.",
+        "Reiniciando todos os sistemas. Volto em instantes.",
+        "Reboot iniciado.",
+    ],
+    "suspend": [
+        "Entrando em modo de hibernação, Senhor.",
+        "Suspendendo operações. Bons sonhos.",
+        "Modo de espera ativado.",
+    ],
+    "brightness_up": [
+        "Luminosidade ampliada, Senhor.",
+        "Brilho da tela elevado.",
+        "Aumentando claridade.",
+    ],
+    "brightness_down": [
+        "Luminosidade reduzida, Senhor.",
+        "Brilho da tela atenuado.",
+        "Reduzindo claridade.",
+    ],
+    "empty_trash": [
+        "Lixeira esvaziada, Senhor.",
+        "Resíduos digitais eliminados.",
+        "Protocolo de limpeza da lixeira executado.",
+    ],
+    "timer": [
+        "Cronômetro definido para {duration}, Senhor.",
+        "Timer ativado. Avisarei em {duration}.",
+        "Contagem regressiva iniciada: {duration}.",
+    ],
+    "logout": [
+        "Encerrando sessão, Senhor.",
+        "Logout iniciado. Até a próxima.",
+        "Sessão encerrada.",
+    ],
 }
 
 
@@ -588,6 +638,147 @@ class CommandExecutor:
         except Exception as e:
             print(f"  Erro ao consultar notícias: {e}")
             return "Não consegui acessar os canais de notícias, Senhor."
+
+    def _do_unlock_screen(self, target, args):
+        subprocess.run(["loginctl", "unlock-session"], capture_output=True)
+        return _pick("unlock_screen")
+
+    def _do_lock_screen(self, target, args):
+        subprocess.Popen(
+            ["loginctl", "lock-session"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return _pick("lock_screen")
+
+    def _do_shutdown(self, target, args):
+        reply = _pick("shutdown")
+        if self._tts:
+            self._tts.speak(reply)
+        time.sleep(1)
+        subprocess.Popen(["systemctl", "poweroff"])
+        return None
+
+    def _do_restart(self, target, args):
+        reply = _pick("restart")
+        if self._tts:
+            self._tts.speak(reply)
+        time.sleep(1)
+        subprocess.Popen(["systemctl", "reboot"])
+        return None
+
+    def _do_suspend(self, target, args):
+        reply = _pick("suspend")
+        if self._tts:
+            self._tts.speak(reply)
+        time.sleep(1)
+        subprocess.Popen(["systemctl", "suspend"])
+        return None
+
+    def _do_brightness_up(self, target, args):
+        pct = args if args else "10"
+        subprocess.run(
+            ["brightnessctl", "set", f"+{pct}%"],
+            capture_output=True,
+        )
+        return _pick("brightness_up")
+
+    def _do_brightness_down(self, target, args):
+        pct = args if args else "10"
+        subprocess.run(
+            ["brightnessctl", "set", f"{pct}%-"],
+            capture_output=True,
+        )
+        return _pick("brightness_down")
+
+    def _do_battery(self, target, args):
+        try:
+            result = subprocess.run(
+                ["upower", "-i", "/org/freedesktop/UPower/devices/battery_BAT0"],
+                capture_output=True, text=True, timeout=5,
+            )
+            for line in result.stdout.split("\n"):
+                if "percentage" in line:
+                    pct = line.split(":")[-1].strip()
+                    return f"Bateria em {pct}, Senhor."
+            return "Informação de bateria indisponível, Senhor."
+        except Exception:
+            return "Não consegui acessar os dados da bateria, Senhor."
+
+    def _do_system_info(self, target, args):
+        try:
+            uptime = subprocess.run(
+                ["uptime", "-p"], capture_output=True, text=True
+            ).stdout.strip()
+            mem = subprocess.run(
+                ["free", "-h", "--si"], capture_output=True, text=True
+            )
+            mem_lines = mem.stdout.strip().split("\n")
+            mem_data = mem_lines[1].split() if len(mem_lines) > 1 else []
+            mem_used = mem_data[2] if len(mem_data) > 2 else "?"
+            mem_total = mem_data[1] if len(mem_data) > 1 else "?"
+            disk = subprocess.run(
+                ["df", "-h", "--output=used,size,pcent", "/"],
+                capture_output=True, text=True,
+            )
+            disk_lines = disk.stdout.strip().split("\n")
+            disk_data = disk_lines[1].split() if len(disk_lines) > 1 else []
+            disk_pct = disk_data[2] if len(disk_data) > 2 else "?"
+            return (
+                f"Sistema ativo {uptime.replace('up ', '')}. "
+                f"Memória: {mem_used} de {mem_total}. "
+                f"Disco raiz: {disk_pct} em uso."
+            )
+        except Exception:
+            return "Falha ao coletar dados do sistema, Senhor."
+
+    def _do_empty_trash(self, target, args):
+        subprocess.run(
+            ["gio", "trash", "--empty"],
+            capture_output=True,
+        )
+        return _pick("empty_trash")
+
+    def _do_timer(self, target, args):
+        import re
+        raw = f"{target} {args} {self._original_text}"
+        match = re.search(r"(\d+)", raw)
+        if not match:
+            return "Não identifiquei a duração do timer, Senhor."
+        value = int(match.group(1))
+        if any(w in raw.lower() for w in ("hora", "hour")):
+            seconds = value * 3600
+            label = f"{value} hora{'s' if value > 1 else ''}"
+        elif any(w in raw.lower() for w in ("segundo", "second", "seg")):
+            seconds = value
+            label = f"{value} segundo{'s' if value > 1 else ''}"
+        else:
+            seconds = value * 60
+            label = f"{value} minuto{'s' if value > 1 else ''}"
+
+        def _alarm():
+            time.sleep(seconds)
+            if self._tts:
+                self._tts.speak(f"Senhor, o timer de {label} expirou.")
+            subprocess.run(
+                ["paplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"],
+                capture_output=True,
+            )
+
+        threading.Thread(target=_alarm, daemon=True).start()
+        return _pick("timer", duration=label)
+
+    def _do_logout(self, target, args):
+        reply = _pick("logout")
+        if self._tts:
+            self._tts.speak(reply)
+        time.sleep(1)
+        subprocess.Popen(
+            ["loginctl", "terminate-user", os.environ.get("USER", "")],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return None
 
     def _do_chat(self, target, args):
         return None

@@ -49,7 +49,7 @@ class VoiceAssistant:
     def _start_listeners(self):
         self.detector.start()
         self.wake_word.start()
-        print("\nAguardando palmas ou \"hey Orion\"...\n")
+        print("\nAguardando palmas ou \"Orion\"...\n")
 
     def _on_activate(self):
         if not self._lock.acquire(blocking=False):
