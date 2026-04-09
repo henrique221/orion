@@ -54,8 +54,8 @@ COMMANDS = {
     "search_web": {
         "examples": ['"pesquisa sobre Python" → target=Python'],
         "replies": {
-            "success": [
-                "Vasculhando a rede por {target}.",
+            "loading": [
+                "Vasculhando a rede por {target}, Senhor.",
                 "Iniciando busca por {target}, Senhor.",
                 "Rastreando informações sobre {target}.",
             ],

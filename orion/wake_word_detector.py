@@ -51,7 +51,7 @@ class WakeWordDetector:
         if len(self._noise_history) > self.CALIBRATION_WINDOW:
             self._noise_history.pop(0)
         noise_floor = np.percentile(self._noise_history, 50)
-        self._threshold = max(noise_floor * 2.0, 0.006)
+        self._threshold = max(noise_floor * 1.5, 0.004)
 
     def _audio_callback(self, indata, frames, time_info, status):
         energy = np.sqrt(np.mean(indata**2))

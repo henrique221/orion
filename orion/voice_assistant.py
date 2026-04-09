@@ -42,7 +42,11 @@ class VoiceAssistant:
         self.tts = TTS(face=self.face)
         self.recognizer = SpeechRecognizer()
         self.interpreter = CommandInterpreter()
-        self.executor = CommandExecutor(tts=self.tts)
+        self.executor = CommandExecutor(
+            tts=self.tts,
+            pause_listening=self._stop_listeners,
+            resume_listening=self._start_listeners,
+        )
         self.detector = ClapDetector(on_activate=self._on_activate)
         self.wake_word = WakeWordDetector(
             on_activate=self._on_activate,
@@ -81,9 +85,10 @@ class VoiceAssistant:
                 self.tts.speak(random.choice(LISTENING_PHRASES))
                 self._conversation_loop()
         finally:
-            self._beep()
+            if not self.executor._demo_running:
+                self._beep()
             self.face.set_state(State.IDLE)
-            if self._running:
+            if self._running and not self.executor._demo_running:
                 self._start_listeners()
             self._lock.release()
 
@@ -146,6 +151,8 @@ class VoiceAssistant:
                 )
 
                 result = self.executor.execute(command, original_text=text)
+                if result == "__END_CONVERSATION__":
+                    return
                 response = result or command.get("reply", "")
                 if response:
                     print(f"  Resposta: {response}")

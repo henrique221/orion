@@ -3,10 +3,14 @@ import datetime
 import math
 import os
 import random
+import select
 import shutil
 import subprocess
+import sys
+import termios
 import threading
 import time
+import tty
 
 import requests
 
@@ -22,10 +26,13 @@ from orion.commands import (
 )
 
 class CommandExecutor:
-    def __init__(self, tts=None):
+    def __init__(self, tts=None, pause_listening=None, resume_listening=None):
         self._tts = tts
+        self._pause_listening = pause_listening
+        self._resume_listening = resume_listening
         self._pending_shutdown = False
         self._demo_running = False
+        self._byobu_wid = None
 
     def execute(self, command, original_text=""):
         if not command:
@@ -90,6 +97,9 @@ class CommandExecutor:
         return pick("open_url", "success", target=target)
 
     def _do_search_web(self, target, args):
+        t = self._speak_async(pick("search_web", "loading", target=target))
+
+        # Open browser
         query = target.replace(" ", "+")
         url = f"https://www.google.com/search?q={query}"
         subprocess.Popen(
@@ -98,7 +108,84 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        return pick("search_web", "success", target=target)
+
+        # Fetch results in parallel
+        snippets = self._fetch_search_results(target)
+        if t:
+            t.join()
+
+        if not snippets:
+            return f"Navegador aberto com a pesquisa, Senhor. Não consegui extrair resultados para resumir."
+
+        # Summarize with LLM
+        question = self._original_text
+        try:
+            import re
+            r = requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.LLM_MODEL,
+                    "prompt": (
+                        f"Resultados de pesquisa para \"{target}\":\n{snippets}\n\n"
+                        f"Pergunta do usuário: \"{question}\"\n\n"
+                        "Resuma os resultados de forma concisa em português do Brasil, "
+                        "no tom do J.A.R.V.I.S. Destaque as informações mais relevantes. "
+                        "Trate-o por Senhor. Máximo 5 frases."
+                    ),
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"temperature": 0.3, "num_predict": 200},
+                },
+                timeout=20,
+            )
+            text = r.json()["response"].strip()
+            text = re.sub(r"[*#_~`>|]", "", text)
+            return text
+        except Exception as e:
+            print(f"  Erro ao resumir pesquisa: {e}")
+            return f"Pesquisa aberta no navegador, Senhor."
+
+    DUCKDUCKGO_URL = "https://lite.duckduckgo.com/lite/"
+
+    def _fetch_search_results(self, query):
+        """Fetches search snippets from DuckDuckGo Lite."""
+        import re
+        try:
+            r = requests.post(
+                self.DUCKDUCKGO_URL,
+                data={"q": query},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=10,
+            )
+            r.raise_for_status()
+            html = r.text
+
+            # Extract snippets from DuckDuckGo Lite HTML
+            # Snippets are in <td class="result-snippet"> tags
+            snippets = re.findall(
+                r'<td\s+class="result-snippet">(.*?)</td>',
+                html, re.DOTALL,
+            )
+            # Extract titles
+            titles = re.findall(
+                r'<a\s+rel="nofollow"\s+href="[^"]*"\s+class="result-link">(.*?)</a>',
+                html, re.DOTALL,
+            )
+
+            results = []
+            for i, (title, snippet) in enumerate(zip(titles, snippets), 1):
+                # Clean HTML tags
+                clean_title = re.sub(r"<[^>]+>", "", title).strip()
+                clean_snippet = re.sub(r"<[^>]+>", "", snippet).strip()
+                if clean_title and clean_snippet:
+                    results.append(f"{i}. {clean_title}: {clean_snippet}")
+                if i >= 5:
+                    break
+
+            return "\n".join(results)
+        except Exception as e:
+            print(f"  Erro ao buscar resultados: {e}")
+            return ""
 
     def _do_volume_up(self, target, args):
         pct = args if args else "10"
@@ -395,19 +482,31 @@ class CommandExecutor:
         return " ".join(parts)
 
     def _do_weather(self, target, args):
-        try:
-            t = self._speak_async(pick("weather", "loading"))
-            location = target.strip() if target else ""
-            day_index = self._resolve_day_index(args)
-            weather_data = self._fetch_weather(location, day_index)
-            if t:
-                t.join()
+        t = self._speak_async(pick("weather", "loading"))
+        location = target.strip() if target else ""
+        day_index = self._resolve_day_index(args)
+        question = self._original_text
 
-            question = self._original_text
+        # Try wttr.in first, fallback to DuckDuckGo
+        try:
+            weather_data = self._fetch_weather(location, day_index)
+        except Exception as e:
+            print(f"  wttr.in falhou ({e}), tentando DuckDuckGo...")
+            loc = location or self.WEATHER_LOCATION
+            weather_data = self._fetch_search_results(f"previsão do tempo {loc} hoje")
+
+        if t:
+            t.join()
+
+        if not weather_data:
+            return "Não consegui acessar os dados meteorológicos, Senhor."
+
+        try:
+            import re
             r = requests.post(
-                "http://localhost:11434/api/generate",
+                f"{self.OLLAMA_URL}/api/generate",
                 json={
-                    "model": "llama3.2",
+                    "model": self.LLM_MODEL,
                     "prompt": (
                         f"Dados meteorológicos: {weather_data}\n\n"
                         f"Pergunta do usuário: \"{question}\"\n\n"
@@ -421,7 +520,6 @@ class CommandExecutor:
                 },
                 timeout=15,
             )
-            import re
             text = r.json()["response"].strip()
             text = re.sub(r"[*#_~`>|]", "", text)
             return text
@@ -452,18 +550,30 @@ class CommandExecutor:
         return "\n".join(headlines)
 
     def _do_news(self, target, args):
-        try:
-            t = self._speak_async(pick("news", "loading"))
-            query = target.strip() if target else ""
-            headlines = self._fetch_news(query)
-            if t:
-                t.join()
+        t = self._speak_async(pick("news", "loading"))
+        query = target.strip() if target else ""
+        question = self._original_text
 
-            question = self._original_text
+        # Try RSS first, fallback to DuckDuckGo
+        try:
+            headlines = self._fetch_news(query)
+        except Exception as e:
+            print(f"  RSS falhou ({e}), tentando DuckDuckGo...")
+            search_query = f"notícias {query} hoje Brasil" if query else "notícias Brasil hoje"
+            headlines = self._fetch_search_results(search_query)
+
+        if t:
+            t.join()
+
+        if not headlines:
+            return "Não consegui acessar os canais de notícias, Senhor."
+
+        try:
+            import re
             r = requests.post(
-                "http://localhost:11434/api/generate",
+                f"{self.OLLAMA_URL}/api/generate",
                 json={
-                    "model": "llama3.2",
+                    "model": self.LLM_MODEL,
                     "prompt": (
                         f"Manchetes de notícias:\n{headlines}\n\n"
                         f"Pergunta do usuário: \"{question}\"\n\n"
@@ -478,7 +588,6 @@ class CommandExecutor:
                 },
                 timeout=15,
             )
-            import re
             text = r.json()["response"].strip()
             text = re.sub(r"[*#_~`>|]", "", text)
             return text
@@ -971,6 +1080,7 @@ class CommandExecutor:
     # ── Demo hacker ──────────────────────────────────────────────
 
     DEMO_DURATION = 30
+    DEMO_MUSIC_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", "demo.mp3")
 
     DEMO_BASH_EFFECTS = [
         # Fake access log
@@ -1026,135 +1136,518 @@ class CommandExecutor:
         return None
 
     def _do_demo(self, target, args):
-        reply = pick("demo")
-        t = self._speak_async(reply)
         self._demo_running = True
+        self._demo_wids = []
+        self._byobu_wid = None
         threading.Thread(target=self._run_demo, daemon=True).start()
-        if t:
-            t.join()
+        return "__END_CONVERSATION__"
+
+    def _find_sink_input(self, app_name):
+        """Find a sink input index by application name."""
+        try:
+            result = subprocess.run(
+                ["pactl", "list", "sink-inputs"],
+                capture_output=True, text=True, timeout=3,
+            )
+            current_idx = None
+            for line in result.stdout.split("\n"):
+                if "Sink Input #" in line:
+                    current_idx = line.split("#")[1].strip()
+                if current_idx and app_name in line.lower():
+                    return current_idx
+        except Exception:
+            pass
         return None
+
+    def _fade_out_demo_music(self):
+        """Fade out music over ~3 seconds then kill."""
+        proc = getattr(self, "_demo_music_proc", None)
+        if not proc:
+            return
+        # Fade volume down via PipeWire sink input
+        idx = self._find_sink_input("pw-play") or self._find_sink_input("pw-cat")
+        if idx:
+            for vol in range(100, -1, -5):  # 100% → 0% in 5% steps
+                subprocess.run(
+                    ["pactl", "set-sink-input-volume", idx, f"{vol}%"],
+                    capture_output=True,
+                )
+                time.sleep(0.15)  # ~3s total
+            # Restore to 100% BEFORE killing so stream-restore saves 100%
+            subprocess.run(
+                ["pactl", "set-sink-input-volume", idx, "100%"],
+                capture_output=True,
+            )
+            time.sleep(0.1)
+        # Kill the process group
+        try:
+            os.killpg(os.getpgid(proc.pid), 9)
+        except (ProcessLookupError, OSError):
+            pass
+        self._demo_music_proc = None
 
     def _do_close_demo(self, target, args):
         self._demo_running = False
-        # Find and close all demo windows
+        time.sleep(0.5)
+        self._fade_out_demo_music()
+        self._close_demo_windows()
+        self._restore_demo_volume()
+        if self._resume_listening:
+            self._resume_listening()
+        return pick("close_demo")
+
+    def _get_window_ids(self):
+        """Returns set of current window IDs."""
         result = subprocess.run(
             ["wmctrl", "-l"], capture_output=True, text=True
         )
-        closed = 0
-        for line in result.stdout.strip().split("\n"):
-            if "ORION-DEMO-" in line:
-                wid = line.split()[0]
-                subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
-                closed += 1
-                time.sleep(0.2)
-        if closed:
-            return pick("close_demo")
-        return "Nenhuma demonstração ativa, Senhor."
+        return {line.split()[0] for line in result.stdout.strip().split("\n") if line.strip()}
+
+    def _track_new_window(self, before_ids, timeout=5):
+        """Waits for a new window to appear and tracks its ID."""
+        for _ in range(int(timeout / 0.2)):
+            time.sleep(0.2)
+            after_ids = self._get_window_ids()
+            new = after_ids - before_ids
+            if new:
+                wid = new.pop()
+                self._demo_wids.append(wid)
+                return wid
+        return None
+
+    def _watch_esc_key(self):
+        """Monitors for ESC key press to interrupt demo."""
+        try:
+            fd = sys.stdin.fileno()
+            old_settings = termios.tcgetattr(fd)
+            try:
+                tty.setraw(fd)
+                while self._demo_running:
+                    if select.select([sys.stdin], [], [], 0.1)[0]:
+                        ch = sys.stdin.read(1)
+                        if ch == '\x1b':  # ESC
+                            print("\n  [Demo interrompida por ESC]")
+                            self._demo_running = False
+                            return
+            finally:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+        except Exception:
+            pass
+
+    def _close_demo_windows(self):
+        # Close only windows we opened — try graceful, then force
+        for wid in getattr(self, "_demo_wids", []):
+            subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
+            time.sleep(0.15)
+        time.sleep(0.5)
+        # Force-kill any that survived
+        for wid in getattr(self, "_demo_wids", []):
+            # Get PID from window ID and kill
+            result = subprocess.run(
+                ["xdotool", "getwindowpid", wid],
+                capture_output=True, text=True,
+            )
+            pid = result.stdout.strip()
+            if pid:
+                try:
+                    os.kill(int(pid), 9)
+                except (ProcessLookupError, OSError, ValueError):
+                    pass
+        # Also kill any leftover byobu session
+        subprocess.run(["byobu", "kill-server"], capture_output=True)
+        self._demo_wids = []
+
+    def _demo_speak(self, text):
+        if self._demo_running and self._tts:
+            self._tts.speak(text)
+
+    def _demo_wait(self, seconds):
+        for _ in range(int(seconds * 10)):
+            if not self._demo_running:
+                return False
+            time.sleep(0.1)
+        return self._demo_running
+
+    def _demo_open_and_close(self, cmd, wait_time=3, kill_proc=False):
+        """Opens something, waits, then closes only the window it opened."""
+        before = self._get_window_ids()
+        proc = subprocess.Popen(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        wid = self._track_new_window(before, timeout=wait_time + 2)
+        if not self._demo_wait(wait_time):
+            return
+        if wid:
+            subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
+            if wid in self._demo_wids:
+                self._demo_wids.remove(wid)
+        if kill_proc:
+            try:
+                os.killpg(os.getpgid(proc.pid), 9)
+            except (ProcessLookupError, OSError):
+                pass
+
+    DEMO_VOLUME_MUSIC = 18       # pw-play volume (0-100) for background music
+    DEMO_VOLUME_VOICE = "160%"  # TTS voice volume during demo
+
+
+    def _save_and_set_demo_volume(self):
+        """Saves current volume and sets demo volumes."""
+        try:
+            result = subprocess.run(
+                ["pactl", "get-sink-volume", "@DEFAULT_SINK@"],
+                capture_output=True, text=True, timeout=3,
+            )
+            # Extract percentage, e.g. "Volume: front-left: 65536 / 100% / ..."
+            import re
+            match = re.search(r"(\d+)%", result.stdout)
+            self._pre_demo_volume = match.group(0) if match else "100%"
+        except Exception:
+            self._pre_demo_volume = "100%"
+
+        # Set main volume high for TTS voice
+        subprocess.run(
+            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", self.DEMO_VOLUME_VOICE],
+            capture_output=True,
+        )
+
+    def _restore_demo_volume(self):
+        """Restores volume to pre-demo level."""
+        vol = getattr(self, "_pre_demo_volume", "100%")
+        subprocess.run(
+            ["pactl", "set-sink-volume", "@DEFAULT_SINK@", vol],
+            capture_output=True,
+        )
+
+    def _animate_terminals(self, wids, cx, cy, win_w, win_h):
+        """Runs orbital animation until self._anim_running is False."""
+        n = len(wids)
+        start = time.time()
+        while self._anim_running and self._demo_running:
+            t = time.time() - start
+            for i, wid in enumerate(wids):
+                phase = i * (2 * math.pi / n)
+                if t < 3:
+                    progress = t / 3
+                    ease = progress * (2 - progress)
+                    rx, ry = 600 * ease, 280 * ease
+                    angle = phase
+                else:
+                    angle = phase + t * 1.2
+                    rx = 600 + 150 * math.sin(t * 0.4)
+                    ry = 280 + 80 * math.cos(t * 0.3)
+                x = max(0, min(int(cx + rx * math.cos(angle) - win_w // 2), 4200))
+                y = max(0, min(int(cy + ry * math.sin(angle) - win_h // 2), 1800))
+                subprocess.run(
+                    ["xdotool", "windowmove", wid, str(x), str(y)],
+                    capture_output=True,
+                )
+            time.sleep(0.03)
 
     def _run_demo(self):
         if not shutil.which("xdotool"):
             return
 
-        effects = self._get_demo_effects()
-        n = len(effects)
-        wids = []
-        procs = []
+        # ── Play background music immediately ─────────────────
+        # Convert MP3 → WAV once, then loop with paplay (ffplay SDL fails in subprocess)
+        self._demo_music_proc = None
+        self._demo_wav = "/tmp/orion_demo_music.wav"
+        if os.path.isfile(self.DEMO_MUSIC_PATH):
+            if not os.path.isfile(self._demo_wav):
+                subprocess.run(
+                    ["ffmpeg", "-y", "-i", self.DEMO_MUSIC_PATH,
+                     "-acodec", "pcm_s16le", "-ar", "44100", "-ac", "2",
+                     self._demo_wav],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            if os.path.isfile(self._demo_wav):
+                # pw-play: PipeWire native, supports --volume, no stream-restore issues
+                vol = self.DEMO_VOLUME_MUSIC / 100.0  # pw-play uses 0.0-1.0
+                self._demo_music_proc = subprocess.Popen(
+                    ["bash", "-c",
+                     f'while true; do pw-play --volume={vol} "{self._demo_wav}"; done'],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
 
-        # Center of the ultrawide (primary monitor)
+        # Watch for ESC key to interrupt
+        threading.Thread(target=self._watch_esc_key, daemon=True).start()
+
+        try:
+            self._run_demo_acts()
+        finally:
+            self._demo_running = False
+            self._fade_out_demo_music()
+            self._close_demo_windows()
+            self._restore_demo_volume()
+            if self._tts:
+                self._tts.allow_interrupt = True
+            if self._resume_listening:
+                self._resume_listening()
+
+    def _run_demo_acts(self):
+        # Disable speech interruption during demo
+        # (listeners already stopped by voice_assistant._on_activate)
+        if self._tts:
+            self._tts.allow_interrupt = False
+
+        # Save volume and boost for demo
+        self._save_and_set_demo_volume()
+
+        # ── Spawn byobu (stays open the whole demo) ───────────
+        if shutil.which("byobu"):
+            subprocess.run(["byobu", "kill-server"], capture_output=True)
+            # Create byobu session with split panes showing system activity
+            setup = (
+                "byobu new-session -d -s orion-demo \\; "
+                "send-keys 'htop' Enter \\; "
+                "split-window -h \\; "
+                "send-keys 'watch -n1 -c sensors 2>/dev/null || watch -n1 free -h' Enter \\; "
+                "split-window -v \\; "
+                "send-keys 'dmesg -wH 2>/dev/null || journalctl -f' Enter \\; "
+                "select-pane -t 0 \\; "
+                "split-window -v \\; "
+                "send-keys 'sudo iotop -o 2>/dev/null || iostat -x 1 2>/dev/null || vmstat 1' Enter \\; "
+                "&& byobu attach -t orion-demo"
+            )
+            subprocess.Popen(
+                ["gnome-terminal", "--title=ORION-BYOBU", "--hide-menubar",
+                 "--geometry=200x50+0+0",
+                 "--", "bash", "-c", f"{setup}; sleep 999"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            wid = self._find_window_by_title("ORION-BYOBU")
+            if wid:
+                self._byobu_wid = wid
+                self._demo_wids.append(wid)
+                # Force window to ultrawide monitor at x=0 and maximize
+                subprocess.run(
+                    ["wmctrl", "-i", "-r", wid, "-b", "remove,maximized_vert,maximized_horz"],
+                    capture_output=True,
+                )
+                time.sleep(0.2)
+                subprocess.run(
+                    ["xdotool", "windowactivate", "--sync", wid],
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["xdotool", "windowmove", "--sync", wid, "0", "0"],
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["xdotool", "windowsize", "--sync", wid, "2560", "1048"],
+                    capture_output=True,
+                )
+                time.sleep(0.5)
+                subprocess.run(
+                    ["wmctrl", "-i", "-r", wid, "-b", "add,maximized_vert,maximized_horz"],
+                    capture_output=True,
+                )
+
+        # Spawn effect terminals
+        before = self._get_window_ids()
+        effects = self._get_demo_effects()
+        term_wids = []
         cx, cy = 1280, 450
         win_w, win_h = 520, 360
 
-        # Phase 1: Spawn terminals in cascade
         for i, effect in enumerate(effects):
             title = f"ORION-DEMO-{i}"
-            proc = subprocess.Popen(
-                [
-                    "gnome-terminal",
-                    f"--title={title}",
-                    "--hide-menubar",
-                    "--",
-                    "bash", "-c", f"{effect}; sleep 999",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
+            subprocess.Popen(
+                ["gnome-terminal", f"--title={title}", "--hide-menubar",
+                 "--", "bash", "-c", f"{effect}; sleep 999"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-            procs.append(proc)
-            wid = self._find_window_by_title(title)
-            if wid:
-                wids.append(wid)
-                # Remove maximize, set size, start stacked at center
-                subprocess.run(
-                    ["xdotool", "windowsize", wid, str(win_w), str(win_h)],
-                    capture_output=True,
-                )
-                subprocess.run(
-                    ["xdotool", "windowmove", wid,
-                     str(cx - win_w // 2 + i * 30),
-                     str(cy - win_h // 2 + i * 20)],
-                    capture_output=True,
-                )
 
-        if not wids:
-            return
+        # Wait for terminals to appear and collect their window IDs
+        expected = len(effects)
+        for _ in range(30):  # up to 3s
+            time.sleep(0.1)
+            result = subprocess.run(
+                ["wmctrl", "-l"], capture_output=True, text=True
+            )
+            found = 0
+            for line in result.stdout.strip().split("\n"):
+                if "ORION-DEMO-" in line and "BYOBU" not in line:
+                    wid = line.split()[0]
+                    if wid not in before and wid not in term_wids:
+                        found += 1
+            if found >= expected:
+                break
 
-        n = len(wids)
-        start = time.time()
+        result = subprocess.run(
+            ["wmctrl", "-l"], capture_output=True, text=True
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            if "ORION-DEMO-" in line and "BYOBU" not in line:
+                wid = line.split()[0]
+                if wid not in before:
+                    term_wids.append(wid)
+                    self._demo_wids.append(wid)
 
-        # Phase 2 + 3: Animate
-        while time.time() - start < self.DEMO_DURATION and self._demo_running:
-            t = time.time() - start
-
-            for i, wid in enumerate(wids):
-                phase = i * (2 * math.pi / n)
-
-                if t < 3:
-                    # Spread out from center
-                    progress = t / 3
-                    ease = progress * (2 - progress)  # ease-out
-                    radius_x = 600 * ease
-                    radius_y = 280 * ease
-                    angle = phase
-                    x = int(cx + radius_x * math.cos(angle) - win_w // 2)
-                    y = int(cy + radius_y * math.sin(angle) - win_h // 2)
-                elif t > self.DEMO_DURATION - 3:
-                    # Collapse back to center
-                    remaining = (self.DEMO_DURATION - t) / 3
-                    ease = remaining * (2 - remaining)
-                    radius_x = 600 * ease
-                    radius_y = 280 * ease
-                    speed = 1.2
-                    angle = phase + t * speed
-                    x = int(cx + radius_x * math.cos(angle) - win_w // 2)
-                    y = int(cy + radius_y * math.sin(angle) - win_h // 2)
-                else:
-                    # Orbital juggling with breathing radius
-                    speed = 1.2
-                    angle = phase + t * speed
-                    rx = 600 + 150 * math.sin(t * 0.4)
-                    ry = 280 + 80 * math.cos(t * 0.3)
-                    x = int(cx + rx * math.cos(angle) - win_w // 2)
-                    y = int(cy + ry * math.sin(angle) - win_h // 2)
-
-                x = max(0, min(x, 4200))
-                y = max(0, min(y, 1800))
-
-                subprocess.run(
-                    ["xdotool", "windowmove", wid, str(x), str(y)],
-                    capture_output=True,
-                )
-
-            time.sleep(0.03)
-
-        # Phase 4: Distribute terminals evenly on screen
-        spacing = (2560 - win_w) // max(n - 1, 1)
-        for i, wid in enumerate(wids):
-            x = i * spacing
-            y = (cy - win_h // 2) + (50 if i % 2 else 0)
+        # Position terminals
+        for i, wid in enumerate(term_wids):
             subprocess.run(
-                ["xdotool", "windowmove", wid, str(x), str(y)],
+                ["xdotool", "windowsize", wid, str(win_w), str(win_h)],
                 capture_output=True,
             )
+            subprocess.run(
+                ["xdotool", "windowmove", wid,
+                 str(cx - win_w // 2 + i * 30),
+                 str(cy - win_h // 2 + i * 20)],
+                capture_output=True,
+            )
+
+        # ── Act 1: Terminals + narration in parallel ────────────
+        if term_wids:
+            self._anim_running = True
+            anim = threading.Thread(
+                target=self._animate_terminals,
+                args=(term_wids, cx, cy, win_w, win_h),
+                daemon=True,
+            )
+            anim.start()
+
+            self._demo_speak(
+                "Bom dia, Senhor. Todos os sistemas estão operacionais. "
+                "Permitam-me apresentar o Projeto Orion. "
+                "Fui criado pelo Senhor Henrique Borges com um único propósito: "
+                "maximizar a produtividade. "
+                "Uma inteligência artificial autônoma, construída para operar "
+                "inteiramente offline, sem depender de servidores externos. "
+                "Tudo roda aqui, nesta máquina."
+            )
+            if not self._demo_running:
+                self._anim_running = False
+                return
+
+            self._demo_speak(
+                "Neste momento, múltiplos processos estão sendo executados em paralelo. "
+                "Análise de rede, compilação de módulos, processamento neural em tempo real. "
+                "Eu escuto, interpreto e ajo. Sem atrasos. Sem intermediários."
+            )
+            if not self._demo_running:
+                self._anim_running = False
+                return
+
+            self._demo_speak(
+                "Canais seguros estabelecidos. Monitoramento de perímetro digital ativo. "
+                "Todos os protocolos operando dentro dos parâmetros esperados. "
+                "Inicialização completa, Senhor. Pronto para demonstração."
+            )
+
+            self._anim_running = False
+            anim.join(timeout=2)
+            for wid in term_wids:
+                subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
+                if wid in self._demo_wids:
+                    self._demo_wids.remove(wid)
+                time.sleep(0.15)
+
+        if not self._demo_running:
+            return
+
+        # ── Act 2: Web search ───────────────────────────────────
+        self._demo_speak(
+            "Tenho acesso completo à internet. Posso pesquisar, ler e resumir "
+            "qualquer informação em segundos. Observe."
+        )
+        if not self._demo_running:
+            return
+        self._demo_open_and_close(
+            ["google-chrome", "--new-window",
+             "https://www.google.com/search?q=inteligência+artificial+2026"],
+            wait_time=2,
+        )
+        if not self._demo_running:
+            return
+        self._demo_speak(
+            "Resultados obtidos e processados. "
+            "Notícias, clima, qualquer pergunta, eu encontro a resposta."
+        )
+        if not self._demo_running:
+            return
+
+        # ── Act 3: Open apps ────────────────────────────────────
+        self._demo_speak(
+            "Também controlo todos os aplicativos do sistema. "
+            "Basta um comando de voz. Vou abrir o Zoom como exemplo."
+        )
+        if not self._demo_running:
+            return
+
+        zoom_cmd = "zoom"
+        if not shutil.which(zoom_cmd):
+            zoom_cmd = "gnome-calculator"
+        self._demo_open_and_close([zoom_cmd], wait_time=2, kill_proc=True)
+        if not self._demo_running:
+            return
+        self._demo_speak(
+            "Aberto e encerrado em segundos. Qualquer aplicativo, a qualquer momento."
+        )
+        if not self._demo_running:
+            return
+
+        # ── Act 4: Work environment ─────────────────────────────
+        self._demo_speak(
+            "Agora, algo mais sofisticado. Com uma única instrução, "
+            "eu monto o ambiente de trabalho completo. Editor, projeto, tudo pronto."
+        )
+        if not self._demo_running:
+            return
+
+        before = self._get_window_ids()
+        subprocess.Popen(
+            ["cursor", "--new-window", os.path.expanduser("~/gitdocs/skyportal-website")],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        cursor_wid = self._track_new_window(before, timeout=5)
+        self._demo_speak(
+            "Projeto Sky Portal carregado no Cursor. "
+            "Ambiente de desenvolvimento configurado e operacional."
+        )
+        if not self._demo_running:
+            return
+        if cursor_wid:
+            subprocess.run(["wmctrl", "-i", "-c", cursor_wid], capture_output=True)
+            if cursor_wid in self._demo_wids:
+                self._demo_wids.remove(cursor_wid)
+
+        if not self._demo_running:
+            return
+
+        # ── Act 5: Vision & analysis ────────────────────────────
+        self._demo_speak(
+            "Meus recursos vão além de comandos simples. "
+            "Eu enxergo o que está na tela. Posso analisar imagens, traduzir textos, "
+            "resumir documentos e explicar qualquer conteúdo visível."
+        )
+        if not self._demo_running:
+            return
+
+        # ── Act 6: Smart home ───────────────────────────────────
+        self._demo_speak(
+            "E não me limito ao computador. "
+            "Eu controlo dispositivos inteligentes da casa inteira. "
+            "Luzes, climatização, piscina. Tudo responde à minha voz."
+        )
+        if not self._demo_running:
+            return
+
+        # ── Act 7: Finale ──────────────────────────────────────
+        self._demo_speak(
+            "Pesquisa inteligente, automação completa, visão computacional, "
+            "controle residencial, e tudo isso sem conexão com nuvem. "
+            "Eu sou o Orion. E estou sempre à disposição, Senhor."
+        )
 
     def _do_chat(self, target, args):
         return None

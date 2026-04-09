@@ -30,6 +30,7 @@ class TTS:
         self._g2p = None
         self._use_piper = False
         self.interrupted = False
+        self.allow_interrupt = True
         self._face = face
 
         if os.path.isfile(self.KOKORO_MODEL) and os.path.isfile(
@@ -93,7 +94,10 @@ class TTS:
                 from orion.face import State
                 self._face.set_state(State.SPEAKING)
             sd.play(samples, sr)
-            self._monitor_for_interrupt(len(samples) / sr)
+            if self.allow_interrupt:
+                self._monitor_for_interrupt(len(samples) / sr)
+            else:
+                sd.wait()
             if self._face:
                 from orion.face import State
                 self._face.set_state(State.IDLE)
