@@ -333,16 +333,62 @@ COMMANDS = {
     },
     "analyze_screen": {
         "examples": [
-            '"analisa a tela"/"o que tem na tela?" → target=""',
-            '"o que está no monitor da esquerda?"/"analisa o ultrawide" → target=ultrawide',
-            '"analisa o notebook"/"o que tem no monitor da direita?" → target=notebook',
-            '"o que tem no monitor de baixo?" → target=inferior',
+            '"analisa a tela"/"o que tem na tela?"/"o que está na tela?" → target="", args=""',
+            '"o que está no monitor da esquerda?"/"analisa o ultrawide" → target=ultrawide, args=""',
+            '"analisa o notebook"/"o que tem no monitor da direita?" → target=notebook, args=""',
+            '"o que tem no monitor de baixo?" → target=inferior, args=""',
+            '"o que tem onde meu mouse está?"/"analisa onde está o cursor" → target=mouse, args=""',
+            '"o que é isso na tela?"/"o que tem aqui?" → target=mouse, args=""',
+            '"traduz o que tem na tela" → target="", args="traduzir"',
+            '"resume o que está na tela" → target="", args="resumir"',
+            '"traduz o que tem onde meu mouse está" → target=mouse, args="traduzir"',
+            '"lê o que tem na tela"/"o que diz na tela?" → target="", args="ler"',
+            '"explica o que tem na tela" → target="", args="explicar"',
         ],
+        "notes": 'Qualquer pedido sobre conteúdo da tela (traduzir, resumir, ler, explicar, analisar) é SEMPRE analyze_screen. NUNCA dividir em open_app ou search_web. Quando menciona mouse/cursor/aqui, target=mouse. Use args para indicar a tarefa (traduzir, resumir, ler, explicar, ou vazio para descrição geral).',
+        "replies": {
+            "capturing": [
+                "Capturando imagem da tela, Senhor.",
+                "Registrando o conteúdo visual.",
+                "Obtendo captura de tela.",
+            ],
+            "swapping": [
+                "Imagem capturada. Ativando módulo de visão.",
+                "Captura concluída. Carregando sistema de análise visual.",
+                "Tela registrada. Iniciando processamento de imagem.",
+            ],
+            "analyzing": [
+                "Analisando o conteúdo visual. Um momento, Senhor.",
+                "Processando a imagem. Aguarde, por gentileza.",
+                "Examinando os elementos da tela.",
+            ],
+            "restoring": [
+                "Análise concluída. Restaurando sistemas.",
+                "Visão processada. Voltando ao modo padrão.",
+                "Dados visuais coletados. Reativando módulo principal.",
+            ],
+        },
+    },
+    "analyze_selection": {
+        "examples": [
+            '"traduz o texto selecionado"/"traduz o que está selecionado"/"traduz esse texto"/"traduz essa palavra" → target="", args="traduzir"',
+            '"resume o texto selecionado"/"resuma a seleção"/"resume esse texto" → target="", args="resumir"',
+            '"lê o texto selecionado"/"leia a seleção"/"lê esse texto" → target="", args="ler"',
+            '"explica o texto selecionado"/"explique a seleção"/"explica esse texto"/"explica essa palavra" → target="", args="explicar"',
+            '"o que diz o texto selecionado?"/"o que diz esse texto?" → target="", args=""',
+            '"corrige o texto selecionado"/"corrige esse texto" → target="", args="corrigir"',
+            '"o que significa essa palavra?"/"o que significa esse texto?" → target="", args="explicar"',
+        ],
+        "notes": 'Qualquer pedido sobre "texto selecionado"/"seleção"/"esse texto"/"essa palavra"/"o que está selecionado" é SEMPRE analyze_selection. NUNCA confundir com analyze_screen.',
         "replies": {
             "loading": [
-                "Capturando imagem e analisando, Senhor.",
-                "Processando captura visual, Senhor.",
-                "Escaneando a tela, Senhor.",
+                "Lendo o texto selecionado, Senhor.",
+                "Capturando a seleção, Senhor.",
+                "Processando o texto destacado.",
+            ],
+            "empty": [
+                "Não encontrei nenhum texto selecionado, Senhor.",
+                "Nenhuma seleção detectada, Senhor.",
             ],
         },
     },
@@ -353,6 +399,16 @@ COMMANDS = {
                 "Iniciando protocolo de demonstração, Senhor.",
                 "Ativando modo espetáculo. Aprecie a exibição.",
                 "Demonstração de capacidades operacionais iniciada.",
+            ],
+        },
+    },
+    "close_demo": {
+        "examples": ['"fecha a demonstração"/"para a demonstração"/"encerra o demo"/"fecha o demo"'],
+        "replies": {
+            "success": [
+                "Demonstração encerrada, Senhor.",
+                "Espetáculo finalizado. Voltando ao normal.",
+                "Protocolo de demonstração desativado.",
             ],
         },
     },
@@ -444,7 +500,10 @@ def build_prompt_mappings():
     lines = []
     for action, cmd in COMMANDS.items():
         for example in cmd["examples"]:
-            lines.append(f"{example} → action={action}" if "→" not in example else example)
+            if "→" in example:
+                lines.append(f"{example}, action={action}")
+            else:
+                lines.append(f"{example} → action={action}")
     return "\n".join(lines)
 
 

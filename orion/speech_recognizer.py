@@ -39,7 +39,7 @@ class SpeechRecognizer:
                 energies.append(np.sqrt(np.mean(data**2)))
         self.noise_floor = np.mean(energies)
         self._noise_profile = np.concatenate(noise_chunks, axis=0).flatten().astype(np.float32)
-        threshold = max(self.noise_floor * 5, 0.01)
+        threshold = max(self.noise_floor * 3, 0.008)
         print(f"ruído={self.noise_floor:.4f}, threshold={threshold:.4f}")
         return threshold
 

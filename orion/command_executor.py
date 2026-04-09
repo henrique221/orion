@@ -25,6 +25,7 @@ class CommandExecutor:
     def __init__(self, tts=None):
         self._tts = tts
         self._pending_shutdown = False
+        self._demo_running = False
 
     def execute(self, command, original_text=""):
         if not command:
@@ -685,95 +686,118 @@ class CommandExecutor:
     OLLAMA_URL = "http://localhost:11434"
     LLM_MODEL = "llama3.2"
 
-    def _do_analyze_screen(self, target, args):
-        t = self._speak_async(pick("analyze_screen", "loading"))
+    MOUSE_REGION_SIZE = (800, 600)  # Area around cursor to capture
 
-        # Resolve monitor
+    def _get_mouse_position(self):
+        """Returns (x, y) of the mouse cursor."""
+        result = subprocess.run(
+            ["xdotool", "getmouselocation"],
+            capture_output=True, text=True,
+        )
+        # Output: x:1234 y:567 screen:0 window:12345
+        parts = dict(p.split(":") for p in result.stdout.strip().split() if ":" in p)
+        return int(parts["x"]), int(parts["y"])
+
+    def _do_analyze_screen(self, target, args):
+        # Resolve monitor or mouse
         name = target.strip().lower() if target else ""
-        name = MONITOR_ALIASES.get(name, name)
-        if name and name not in MONITORS:
-            if t:
-                t.join()
-            return f"Monitor '{target}' não encontrado, Senhor."
+        is_mouse = name in ("mouse", "cursor", "aqui")
+        if not is_mouse:
+            name = MONITOR_ALIASES.get(name, name)
+            if name and name not in MONITORS:
+                return f"Monitor '{target}' não encontrado, Senhor."
 
         try:
-            # Capture screenshot
+            # Stage 1: Capture
+            self._speak_sync(pick("analyze_screen", "capturing"))
+
             img_path = "/tmp/orion_screen_analyze.png"
             full_path = "/tmp/orion_screen_full.png"
-            if name:
+
+            # Always capture full screen first
+            subprocess.run(
+                ["scrot", full_path, "--overwrite"], capture_output=True
+            )
+            if not os.path.isfile(full_path):
+                subprocess.run(
+                    ["gnome-screenshot", "-f", full_path],
+                    capture_output=True,
+                )
+
+            if not os.path.isfile(full_path):
+                return "Falha na captura de tela, Senhor."
+
+            if is_mouse:
+                # Crop region around mouse cursor
+                mx, my = self._get_mouse_position()
+                rw, rh = self.MOUSE_REGION_SIZE
+                cx = max(0, mx - rw // 2)
+                cy = max(0, my - rh // 2)
+                print(f"  Mouse em ({mx}, {my}), recortando {rw}x{rh}+{cx}+{cy}")
+                subprocess.run(
+                    ["convert", full_path,
+                     "-crop", f"{rw}x{rh}+{cx}+{cy}", "+repage", img_path],
+                    capture_output=True,
+                )
+                os.remove(full_path)
+            elif name:
                 x, y, w, h = MONITORS[name]
-                # Capture full screen, then crop to monitor region
                 subprocess.run(
-                    ["scrot", full_path, "--overwrite"], capture_output=True
+                    ["convert", full_path,
+                     "-crop", f"{w}x{h}+{x}+{y}", "+repage", img_path],
+                    capture_output=True,
                 )
-                if not os.path.isfile(full_path):
-                    subprocess.run(
-                        ["gnome-screenshot", "-f", full_path],
-                        capture_output=True,
-                    )
-                if os.path.isfile(full_path):
-                    subprocess.run(
-                        ["convert", full_path,
-                         "-crop", f"{w}x{h}+{x}+{y}", "+repage", img_path],
-                        capture_output=True,
-                    )
-                    os.remove(full_path)
+                os.remove(full_path)
             else:
-                # Full screen capture
-                subprocess.run(
-                    ["scrot", img_path, "--overwrite"], capture_output=True
-                )
-                if not os.path.isfile(img_path):
-                    subprocess.run(
-                        ["gnome-screenshot", "-f", img_path],
-                        capture_output=True,
-                    )
+                os.rename(full_path, img_path)
 
             if not os.path.isfile(img_path):
-                if t:
-                    t.join()
                 return "Falha na captura de tela, Senhor."
 
             with open(img_path, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode()
 
-            # Unload LLM to free VRAM
+            # Stage 2: Swap models
+            self._speak_sync(pick("analyze_screen", "swapping"))
+            print("  Descarregando LLM para liberar VRAM...")
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={"model": self.LLM_MODEL, "keep_alive": 0},
                 timeout=10,
             )
-            time.sleep(1)
+            time.sleep(2)
 
-            if t:
-                t.join()
-
-            # Analyze with vision model
-            question = self._original_text
+            # Stage 3: Analyze — vision model extracts all text/content
+            self._speak_sync(pick("analyze_screen", "analyzing"))
+            print(f"  Carregando modelo de visão ({VISION_MODEL})...")
             r = requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
                     "model": VISION_MODEL,
                     "prompt": (
-                        f"Pergunta do usuário: \"{question}\"\n\n"
-                        "Descreva o que você vê na tela de forma concisa em português do Brasil. "
-                        "Foque no conteúdo principal visível. Máximo 4 frases."
+                        "Read and extract ALL visible text on this screen. "
+                        "Also describe any images, UI elements, windows, and applications visible. "
+                        "Be thorough — capture every piece of text you can read."
                     ),
                     "images": [img_b64],
                     "stream": False,
-                    "options": {"num_predict": 150},
+                    "options": {"num_predict": 500},
                 },
-                timeout=60,
+                timeout=120,
             )
             r.raise_for_status()
             analysis = r.json()["response"].strip()
+            print(f"  Análise bruta: {analysis}")
 
-            # Unload vision model, reload LLM
+            # Stage 4: Restore LLM
+            self._speak_sync(pick("analyze_screen", "restoring"))
+            print("  Restaurando LLM...")
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={"model": VISION_MODEL, "keep_alive": 0},
                 timeout=10,
             )
+            time.sleep(1)
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
@@ -785,28 +809,164 @@ class CommandExecutor:
                 },
                 timeout=30,
             )
+            print("  LLM restaurado.")
 
             os.remove(img_path)
-            return analysis
+
+            # Stage 5: LLM answers the user's question using the extracted content
+            import re
+            question = self._original_text
+            task = args.strip().lower() if args else ""
+
+            task_instructions = {
+                "traduzir": "Traduza o texto extraído da tela para português do Brasil.",
+                "resumir": "Resuma o conteúdo da tela de forma concisa.",
+                "ler": "Leia e reproduza o texto visível na tela.",
+                "explicar": "Explique o conteúdo da tela de forma clara e didática.",
+            }
+            task_hint = task_instructions.get(task, "Responda à pergunta do usuário sobre o conteúdo da tela.")
+
+            r = requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.LLM_MODEL,
+                    "prompt": (
+                        f"Conteúdo extraído da tela:\n{analysis}\n\n"
+                        f"Pergunta do usuário: \"{question}\"\n\n"
+                        f"Tarefa: {task_hint}\n\n"
+                        "Responda em português do Brasil de forma concisa, "
+                        "no tom do J.A.R.V.I.S. Trate-o por Senhor. "
+                        "Máximo 5 frases. Foque no que foi pedido."
+                    ),
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"temperature": 0.3, "num_predict": 200},
+                },
+                timeout=20,
+            )
+            text = r.json()["response"].strip()
+            text = re.sub(r"[*#_~`>|]", "", text)
+            return text
 
         except Exception as e:
             print(f"  Erro na análise de tela: {e}")
-            # Ensure LLM is back
-            try:
-                requests.post(
-                    f"{self.OLLAMA_URL}/api/generate",
-                    json={
-                        "model": self.LLM_MODEL,
-                        "prompt": "ok",
-                        "keep_alive": -1,
-                        "stream": False,
-                        "options": {"num_predict": 1},
-                    },
-                    timeout=30,
-                )
-            except Exception:
-                pass
+            self._restore_llm()
             return "Falha na análise visual, Senhor."
+
+    def _get_selected_text(self):
+        """Tries multiple methods to get selected text."""
+        methods = [
+            # 1. xclip primary selection (highlighted text)
+            ["xclip", "-selection", "primary", "-o"],
+            # 2. xsel primary selection
+            ["xsel", "-o"],
+            # 3. xclip clipboard
+            ["xclip", "-selection", "clipboard", "-o"],
+            # 4. xsel clipboard
+            ["xsel", "--clipboard", "-o"],
+        ]
+        for cmd in methods:
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=3,
+                )
+                text = result.stdout.strip()
+                if text:
+                    return text
+            except (FileNotFoundError, Exception):
+                continue
+
+        # 5. Last resort: simulate Ctrl+C and read clipboard
+        try:
+            subprocess.run(
+                ["xdotool", "key", "--clearmodifiers", "ctrl+c"],
+                capture_output=True, timeout=3,
+            )
+            time.sleep(0.3)
+            for cmd in methods:
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=3,
+                    )
+                    text = result.stdout.strip()
+                    if text:
+                        return text
+                except (FileNotFoundError, Exception):
+                    continue
+        except Exception:
+            pass
+
+        return ""
+
+    def _do_analyze_selection(self, target, args):
+        self._speak_sync(pick("analyze_selection", "loading"))
+
+        selected = self._get_selected_text()
+
+        if not selected:
+            return pick("analyze_selection", "empty")
+
+        print(f"  Texto selecionado ({len(selected)} chars): {selected[:100]}...")
+
+        import re
+        question = self._original_text
+        task = args.strip().lower() if args else ""
+
+        task_instructions = {
+            "traduzir": "Traduza o texto para português do Brasil. Se já estiver em português, traduza para inglês.",
+            "resumir": "Resuma o texto de forma concisa.",
+            "ler": "Leia e reproduza o texto.",
+            "explicar": "Explique o conteúdo do texto de forma clara e didática.",
+            "corrigir": "Corrija erros de gramática e ortografia no texto. Mostre o texto corrigido.",
+        }
+        task_hint = task_instructions.get(task, "Responda à pergunta do usuário sobre o texto.")
+
+        try:
+            r = requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.LLM_MODEL,
+                    "prompt": (
+                        f"Texto selecionado pelo usuário:\n\"{selected}\"\n\n"
+                        f"Pedido do usuário: \"{question}\"\n\n"
+                        f"Tarefa: {task_hint}\n\n"
+                        "Responda em português do Brasil de forma concisa, "
+                        "no tom do J.A.R.V.I.S. Trate-o por Senhor. "
+                        "Foque no que foi pedido."
+                    ),
+                    "stream": False,
+                    "keep_alive": -1,
+                    "options": {"temperature": 0.3, "num_predict": 300},
+                },
+                timeout=20,
+            )
+            text = r.json()["response"].strip()
+            text = re.sub(r"[*#_~`>|]", "", text)
+            return text
+        except Exception as e:
+            print(f"  Erro na análise de seleção: {e}")
+            return "Falha ao processar o texto selecionado, Senhor."
+
+    def _speak_sync(self, text):
+        """Fala e espera terminar antes de continuar."""
+        if self._tts and text:
+            self._tts.speak(text)
+
+    def _restore_llm(self):
+        try:
+            requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.LLM_MODEL,
+                    "prompt": "ok",
+                    "keep_alive": -1,
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                },
+                timeout=30,
+            )
+        except Exception:
+            pass
 
     # ── Demo hacker ──────────────────────────────────────────────
 
@@ -868,10 +1028,28 @@ class CommandExecutor:
     def _do_demo(self, target, args):
         reply = pick("demo")
         t = self._speak_async(reply)
+        self._demo_running = True
         threading.Thread(target=self._run_demo, daemon=True).start()
         if t:
             t.join()
         return None
+
+    def _do_close_demo(self, target, args):
+        self._demo_running = False
+        # Find and close all demo windows
+        result = subprocess.run(
+            ["wmctrl", "-l"], capture_output=True, text=True
+        )
+        closed = 0
+        for line in result.stdout.strip().split("\n"):
+            if "ORION-DEMO-" in line:
+                wid = line.split()[0]
+                subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
+                closed += 1
+                time.sleep(0.2)
+        if closed:
+            return pick("close_demo")
+        return "Nenhuma demonstração ativa, Senhor."
 
     def _run_demo(self):
         if not shutil.which("xdotool"):
@@ -924,7 +1102,7 @@ class CommandExecutor:
         start = time.time()
 
         # Phase 2 + 3: Animate
-        while time.time() - start < self.DEMO_DURATION:
+        while time.time() - start < self.DEMO_DURATION and self._demo_running:
             t = time.time() - start
 
             for i, wid in enumerate(wids):

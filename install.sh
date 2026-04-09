@@ -33,6 +33,8 @@ sudo apt-get install -y -qq \
     ffmpeg \
     wmctrl \
     xdotool \
+    xclip \
+    xsel \
     scrot \
     imagemagick \
     curl \
@@ -106,7 +108,7 @@ echo ""
 info "Verificando instalacao..."
 echo ""
 OK=true
-for pkg in portaudio19-dev libsndfile1 espeak-ng pulseaudio-utils ffmpeg wmctrl xdotool scrot imagemagick; do
+for pkg in portaudio19-dev libsndfile1 espeak-ng pulseaudio-utils ffmpeg wmctrl xdotool xclip xsel scrot imagemagick; do
     if dpkg -s "$pkg" &>/dev/null; then
         echo "  $pkg: OK"
     else

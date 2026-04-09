@@ -31,6 +31,19 @@ class WakeWordDetector:
         self._pre_buffer = collections.deque(maxlen=self.PRE_BUFFER_BLOCKS)
         self._checking = False
         self._noise_history = []
+        self._noise_profile = self._calibrate_noise()
+
+    def _calibrate_noise(self):
+        """Captura 1s de ruído ambiente para o redutor de ruído."""
+        chunk_size = self.BLOCK_SIZE
+        noise_chunks = []
+        with sd.InputStream(
+            samplerate=self.SAMPLE_RATE, channels=1, blocksize=chunk_size
+        ) as stream:
+            for _ in range(int(1.0 / (chunk_size / self.SAMPLE_RATE))):
+                data, _ = stream.read(chunk_size)
+                noise_chunks.append(data.copy())
+        return np.concatenate(noise_chunks, axis=0).flatten().astype(np.float32)
 
     def _update_noise_floor(self, energy):
         """Mantém uma janela deslizante do ruído ambiente."""
@@ -38,7 +51,7 @@ class WakeWordDetector:
         if len(self._noise_history) > self.CALIBRATION_WINDOW:
             self._noise_history.pop(0)
         noise_floor = np.percentile(self._noise_history, 50)
-        self._threshold = max(noise_floor * 2.5, 0.008)
+        self._threshold = max(noise_floor * 2.0, 0.006)
 
     def _audio_callback(self, indata, frames, time_info, status):
         energy = np.sqrt(np.mean(indata**2))
@@ -84,7 +97,7 @@ class WakeWordDetector:
 
     def _check(self, audio):
         try:
-            audio = clean_audio(audio, self.SAMPLE_RATE, prop_decrease=0.5)
+            audio = clean_audio(audio, self.SAMPLE_RATE, noise_profile=self._noise_profile, prop_decrease=0.5)
             segments, _ = self.model.transcribe(
                 audio,
                 language="pt",
