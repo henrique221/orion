@@ -129,8 +129,8 @@ class VoiceAssistant:
                 return
 
             self.face.set_state(State.PROCESSING)
-            command = self.interpreter.interpret(text)
-            if not command:
+            commands = self.interpreter.interpret(text)
+            if not commands:
                 self.tts.speak(random.choice([
                     "Houve uma falha no processamento, Senhor.",
                     "Meus sistemas não conseguiram interpretar. Pode repetir?",
@@ -138,32 +138,55 @@ class VoiceAssistant:
                 ]))
                 return
 
-            print(
-                f"  Acao: {command.get('action')} -> "
-                f"{command.get('target', '')}"
-            )
+            interrupted = False
+            for command in commands:
+                print(
+                    f"  Acao: {command.get('action')} -> "
+                    f"{command.get('target', '')}"
+                )
 
-            result = self.executor.execute(command, original_text=text)
-            response = result or command.get("reply", "")
-            if response:
-                print(f"  Resposta: {response}")
-                self.tts.speak(response)
-                if self.tts.interrupted:
-                    print("  Interrompido pelo usuário.")
-                    continue
+                result = self.executor.execute(command, original_text=text)
+                response = result or command.get("reply", "")
+                if response:
+                    print(f"  Resposta: {response}")
+                    self.tts.speak(response)
+                    if self.tts.interrupted:
+                        print("  Interrompido pelo usuário.")
+                        interrupted = True
+                        break
+            if interrupted:
+                continue
 
             print("  Aguardando próximo comando...")
+
+    GREETINGS = {
+        "morning": [
+            "Bom dia, Senhor. Sistemas online.",
+            "Bom dia, senhor Borges. Às ordens.",
+            "Bom dia, Senhor. Orion operacional.",
+        ],
+        "afternoon": [
+            "Boa tarde, Senhor. Pronto para servir.",
+            "Boa tarde, senhor Borges. Online.",
+            "Boa tarde, Senhor. Sistemas ativos.",
+        ],
+        "evening": [
+            "Boa noite, Senhor. À disposição.",
+            "Boa noite, senhor Borges. Orion online.",
+            "Boa noite, Senhor. Pronto quando precisar.",
+        ],
+    }
 
     def start(self):
         self.face.setup()
         hour = datetime.datetime.now().hour
         if hour < 12:
-            period = "Bom dia"
+            period = "morning"
         elif hour < 18:
-            period = "Boa tarde"
+            period = "afternoon"
         else:
-            period = "Boa noite"
-        greeting = f"{period}, senhor Borges. Todos os sistemas operacionais. Aguardando instruções."
+            period = "evening"
+        greeting = random.choice(self.GREETINGS[period])
         print(f"\n  {greeting}")
         self.tts.speak(greeting)
         self._start_listeners()

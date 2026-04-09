@@ -1,219 +1,25 @@
+import base64
 import datetime
+import math
 import os
 import random
+import shutil
 import subprocess
 import threading
 import time
 
 import requests
 
-
-IFTTT_KEY = "h0IO5AV2asEYG4fjT_SPbeimWkcqmlevMAAyaKZcYss"
-IFTTT_URL = "https://maker.ifttt.com/trigger/{event}/with/key/" + IFTTT_KEY
-
-SMART_HOME_DEVICES = {
-    "varanda": {"on": "varanda_on", "off": "varanda_off"},
-    "piscina": {"on": "piscina_on", "off": "piscina_off"},
-}
-
-APP_MAP = {
-    "chrome": "google-chrome",
-    "google chrome": "google-chrome",
-    "firefox": "firefox",
-    "terminal": "gnome-terminal",
-    "vscode": "code",
-    "vs code": "code",
-    "code": "code",
-    "nautilus": "nautilus",
-    "arquivos": "nautilus",
-    "files": "nautilus",
-    "spotify": "spotify",
-    "calculadora": "gnome-calculator",
-    "calculator": "gnome-calculator",
-    "editor": "gedit",
-    "gedit": "gedit",
-    "texto": "gedit",
-    "configuracoes": "gnome-control-center",
-    "settings": "gnome-control-center",
-    "monitor": "gnome-system-monitor",
-    "gimp": "gimp",
-    "vlc": "vlc",
-    "telegram": "telegram-desktop",
-    "discord": "discord",
-    "slack": "slack",
-    "obs": "obs",
-    "thunderbird": "thunderbird",
-    "libreoffice": "libreoffice",
-}
-
-REPLIES = {
-    "open_app": [
-        "Inicializando {target}, Senhor.",
-        "Carregando {target}.",
-        "{target} entrando online.",
-        "Executando {target}, Senhor.",
-    ],
-    "close_app": [
-        "{target} encerrado, Senhor.",
-        "Desligando {target}.",
-        "{target} fora do ar.",
-    ],
-    "open_url": [
-        "Direcionando navegador, Senhor.",
-        "Acessando {target}.",
-        "Navegador redirecionado.",
-    ],
-    "search_web": [
-        "Vasculhando a rede por {target}.",
-        "Iniciando busca por {target}, Senhor.",
-        "Rastreando informações sobre {target}.",
-    ],
-    "volume_up": [
-        "Amplificando saída de áudio.",
-        "Volume elevado, Senhor.",
-        "Aumentando potência sonora.",
-    ],
-    "volume_down": [
-        "Reduzindo saída de áudio.",
-        "Volume atenuado, Senhor.",
-        "Diminuindo potência sonora.",
-    ],
-    "mute": [
-        "Protocolo silencioso ativado.",
-        "Áudio suprimido, Senhor.",
-        "Silêncio total.",
-    ],
-    "screenshot": [
-        "Imagem capturada, Senhor.",
-        "Registro visual arquivado.",
-        "Screenshot efetuado com sucesso.",
-    ],
-    "close_all": [
-        "Encerrando todos os processos, Senhor.",
-        "Limpando a mesa. Tudo desligado.",
-        "Todos os aplicativos foram dispensados.",
-        "Protocolo de limpeza executado.",
-    ],
-    "start_work_loading": [
-        "Configurando segunda área de trabalho.",
-        "Preparando a próxima estação.",
-        "Montando o restante do ambiente.",
-        "Quase lá, Senhor. Finalizando configurações.",
-    ],
-    "start_work_done": [
-        "Tudo pronto, Senhor. Bom trabalho.",
-        "Ambiente configurado. Bom trabalho, Senhor.",
-        "Estações operacionais. Bom trabalho, senhor Borges.",
-        "Sistemas prontos. Que seja um dia produtivo, Senhor.",
-    ],
-    "switch_workspace": [
-        "Área de trabalho {num}, Senhor.",
-        "Alternando para área {num}.",
-        "Transferindo para área de trabalho {num}.",
-    ],
-    "lock_screen": [
-        "Trancando a estação, Senhor.",
-        "Bloqueio ativado. Ninguém entra sem autorização.",
-        "Protocolo de segurança ativado.",
-    ],
-    "unlock_screen": [
-        "Estação desbloqueada, Senhor.",
-        "Acesso restaurado. Bem-vindo de volta.",
-        "Protocolo de segurança desativado.",
-    ],
-    "shutdown": [
-        "Encerrando todos os sistemas. Até breve, Senhor.",
-        "Desligamento iniciado. Foi um prazer servi-lo.",
-        "Protocolo de desligamento executado.",
-    ],
-    "shutdown_confirm": [
-        "Tem certeza que deseja desligar, Senhor?",
-        "Confirma o desligamento completo, Senhor?",
-        "Devo realmente encerrar todos os sistemas, Senhor?",
-    ],
-    "shutdown_cancelled": [
-        "Desligamento cancelado, Senhor.",
-        "Entendido, mantendo os sistemas ativos.",
-        "Operação abortada. Seguimos online, Senhor.",
-    ],
-    "restart": [
-        "Reinicialização em andamento, Senhor.",
-        "Reiniciando todos os sistemas. Volto em instantes.",
-        "Reboot iniciado.",
-    ],
-    "suspend": [
-        "Entrando em modo de hibernação, Senhor.",
-        "Suspendendo operações. Bons sonhos.",
-        "Modo de espera ativado.",
-    ],
-    "brightness_up": [
-        "Luminosidade ampliada, Senhor.",
-        "Brilho da tela elevado.",
-        "Aumentando claridade.",
-    ],
-    "brightness_down": [
-        "Luminosidade reduzida, Senhor.",
-        "Brilho da tela atenuado.",
-        "Reduzindo claridade.",
-    ],
-    "empty_trash": [
-        "Lixeira esvaziada, Senhor.",
-        "Resíduos digitais eliminados.",
-        "Protocolo de limpeza da lixeira executado.",
-    ],
-    "timer": [
-        "Cronômetro definido para {duration}, Senhor.",
-        "Timer ativado. Avisarei em {duration}.",
-        "Contagem regressiva iniciada: {duration}.",
-    ],
-    "smart_home_on": [
-        "Ativando {device}, Senhor.",
-        "{device} ligado.",
-        "Comando enviado. {device} online.",
-    ],
-    "smart_home_off": [
-        "Desativando {device}, Senhor.",
-        "{device} desligado.",
-        "Comando enviado. {device} offline.",
-    ],
-    "smart_home_error": [
-        "Falha ao controlar {device}, Senhor.",
-        "Não consegui acionar {device}. Verifique a conexão.",
-    ],
-    "logout": [
-        "Encerrando sessão, Senhor.",
-        "Logout iniciado. Até a próxima.",
-        "Sessão encerrada.",
-    ],
-}
-
-
-def _pick(action, **kwargs):
-    templates = REPLIES.get(action, [])
-    if not templates:
-        return None
-    return random.choice(templates).format(**kwargs)
-
-
-SAFE_COMMAND_PREFIXES = [
-    "ls",
-    "pwd",
-    "echo",
-    "date",
-    "cal",
-    "df",
-    "free",
-    "whoami",
-    "hostname",
-    "uname",
-    "uptime",
-    "cat /etc",
-    "which",
-    "wc",
-    "head",
-    "tail",
-]
-
+from orion.commands import (
+    APP_MAP,
+    IFTTT_URL,
+    MONITOR_ALIASES,
+    MONITORS,
+    SAFE_COMMAND_PREFIXES,
+    SMART_HOME_DEVICES,
+    VISION_MODEL,
+    pick,
+)
 
 class CommandExecutor:
     def __init__(self, tts=None):
@@ -233,7 +39,7 @@ class CommandExecutor:
                 "afirmativo", "claro", "manda", "yes",
             )):
                 return self._execute_shutdown()
-            return _pick("shutdown_cancelled")
+            return pick("shutdown", "cancelled")
 
         action = command.get("action", "chat")
         target = command.get("target", "")
@@ -256,7 +62,7 @@ class CommandExecutor:
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-            return _pick("open_app", target=target.capitalize())
+            return pick("open_app", "success", target=target.capitalize())
         except FileNotFoundError:
             return f"Aplicativo {target} não localizado nos meus registros, Senhor."
 
@@ -264,11 +70,11 @@ class CommandExecutor:
         app = APP_MAP.get(target.lower(), target)
         try:
             subprocess.run(["wmctrl", "-c", target], capture_output=True)
-            return _pick("close_app", target=target.capitalize())
+            return pick("close_app", "success", target=target.capitalize())
         except FileNotFoundError:
             try:
                 subprocess.run(["pkill", "-f", app], capture_output=True)
-                return _pick("close_app", target=target.capitalize())
+                return pick("close_app", "success", target=target.capitalize())
             except Exception:
                 return f"{target} não está respondendo ao encerramento, Senhor."
 
@@ -280,7 +86,7 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        return _pick("open_url", target=target)
+        return pick("open_url", "success", target=target)
 
     def _do_search_web(self, target, args):
         query = target.replace(" ", "+")
@@ -291,7 +97,7 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        return _pick("search_web", target=target)
+        return pick("search_web", "success", target=target)
 
     def _do_volume_up(self, target, args):
         pct = args if args else "10"
@@ -299,7 +105,7 @@ class CommandExecutor:
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"+{pct}%"],
             capture_output=True,
         )
-        return _pick("volume_up")
+        return pick("volume_up")
 
     def _do_volume_down(self, target, args):
         pct = args if args else "10"
@@ -307,14 +113,14 @@ class CommandExecutor:
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"-{pct}%"],
             capture_output=True,
         )
-        return _pick("volume_down")
+        return pick("volume_down")
 
     def _do_mute(self, target, args):
         subprocess.run(
             ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
             capture_output=True,
         )
-        return _pick("mute")
+        return pick("mute")
 
     def _do_screenshot(self, target, args):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -323,10 +129,10 @@ class CommandExecutor:
             ["gnome-screenshot", "-f", path], capture_output=True
         )
         if result.returncode == 0:
-            return _pick("screenshot")
+            return pick("screenshot")
         result = subprocess.run(["scrot", path], capture_output=True)
         if result.returncode == 0:
-            return _pick("screenshot")
+            return pick("screenshot")
         return "Falha na captura de tela, Senhor. Sistemas de imagem indisponíveis."
 
     def _do_show_time(self, target, args):
@@ -437,7 +243,7 @@ class CommandExecutor:
         if t:
             t.join()
         # Frase de loading enquanto abre workspace 2
-        t = self._speak_async(_pick("start_work_loading"))
+        t = self._speak_async(pick("start_work", "loading"))
 
         time.sleep(3)
         subprocess.run(["wmctrl", "-s", "1"], capture_output=True)
@@ -458,7 +264,7 @@ class CommandExecutor:
 
         if t:
             t.join()
-        return _pick("start_work_done")
+        return pick("start_work", "done")
 
     def _motivational_quote(self):
         try:
@@ -480,7 +286,7 @@ class CommandExecutor:
             phrase = r.json()["response"].strip().strip('"')
             return phrase
         except Exception:
-            return _pick("start_work")
+            return pick("start_work", "done")
 
     def _do_close_all(self, target, args):
         # Descobre o PID do terminal que roda o Orion
@@ -512,7 +318,7 @@ class CommandExecutor:
                 continue
             subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
             time.sleep(0.3)
-        return _pick("close_all")
+        return pick("close_all")
 
     def _do_switch_workspace(self, target, args):
         import re
@@ -522,16 +328,10 @@ class CommandExecutor:
             return "Número da área de trabalho inválido."
         num = int(match.group()) - 1
         subprocess.run(["wmctrl", "-s", str(num)], capture_output=True)
-        return _pick("switch_workspace", num=num + 1)
+        return pick("switch_workspace", "success", num=num + 1)
 
     WEATHER_LOCATION = "Conceição da Aparecida"
 
-    WEATHER_LOADING = [
-        "Consultando satélites meteorológicos.",
-        "Acessando dados climáticos, Senhor.",
-        "Verificando as condições atmosféricas.",
-        "Coletando informações meteorológicas.",
-    ]
 
     WEEKDAY_MAP = {
         "segunda": 0, "terça": 1, "terca": 1,
@@ -595,7 +395,7 @@ class CommandExecutor:
 
     def _do_weather(self, target, args):
         try:
-            t = self._speak_async(random.choice(self.WEATHER_LOADING))
+            t = self._speak_async(pick("weather", "loading"))
             location = target.strip() if target else ""
             day_index = self._resolve_day_index(args)
             weather_data = self._fetch_weather(location, day_index)
@@ -628,12 +428,6 @@ class CommandExecutor:
             print(f"  Erro ao consultar clima: {e}")
             return "Não consegui acessar os dados meteorológicos, Senhor."
 
-    NEWS_LOADING = [
-        "Rastreando as últimas notícias, Senhor.",
-        "Acessando os canais de informação.",
-        "Consultando as fontes de notícias.",
-        "Varrendo os noticiários, Senhor.",
-    ]
 
     AGENCIA_BRASIL_RSS = "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
     GOOGLE_NEWS_SEARCH = "https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
@@ -658,7 +452,7 @@ class CommandExecutor:
 
     def _do_news(self, target, args):
         try:
-            t = self._speak_async(random.choice(self.NEWS_LOADING))
+            t = self._speak_async(pick("news", "loading"))
             query = target.strip() if target else ""
             headlines = self._fetch_news(query)
             if t:
@@ -726,7 +520,7 @@ class CommandExecutor:
     def _do_unlock_screen(self, target, args):
         subprocess.run(["loginctl", "unlock-session"], capture_output=True)
         self._inhibit_suspend()
-        return _pick("unlock_screen")
+        return pick("unlock_screen")
 
     def _do_lock_screen(self, target, args):
         subprocess.Popen(
@@ -734,14 +528,14 @@ class CommandExecutor:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return _pick("lock_screen")
+        return pick("lock_screen")
 
     def _do_shutdown(self, target, args):
         self._pending_shutdown = True
-        return _pick("shutdown_confirm")
+        return pick("shutdown", "confirm")
 
     def _execute_shutdown(self):
-        reply = _pick("shutdown")
+        reply = pick("shutdown")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -749,7 +543,7 @@ class CommandExecutor:
         return None
 
     def _do_restart(self, target, args):
-        reply = _pick("restart")
+        reply = pick("restart")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -757,7 +551,7 @@ class CommandExecutor:
         return None
 
     def _do_suspend(self, target, args):
-        reply = _pick("suspend")
+        reply = pick("suspend")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -770,7 +564,7 @@ class CommandExecutor:
             ["brightnessctl", "set", f"+{pct}%"],
             capture_output=True,
         )
-        return _pick("brightness_up")
+        return pick("brightness_up")
 
     def _do_brightness_down(self, target, args):
         pct = args if args else "10"
@@ -778,7 +572,7 @@ class CommandExecutor:
             ["brightnessctl", "set", f"{pct}%-"],
             capture_output=True,
         )
-        return _pick("brightness_down")
+        return pick("brightness_down")
 
     def _do_battery(self, target, args):
         try:
@@ -826,7 +620,7 @@ class CommandExecutor:
             ["gio", "trash", "--empty"],
             capture_output=True,
         )
-        return _pick("empty_trash")
+        return pick("empty_trash")
 
     def _do_timer(self, target, args):
         import re
@@ -855,10 +649,10 @@ class CommandExecutor:
             )
 
         threading.Thread(target=_alarm, daemon=True).start()
-        return _pick("timer", duration=label)
+        return pick("timer", "success", duration=label)
 
     def _do_logout(self, target, args):
-        reply = _pick("logout")
+        reply = pick("logout")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -882,9 +676,307 @@ class CommandExecutor:
             r = requests.get(IFTTT_URL.format(event=event), timeout=10)
             r.raise_for_status()
             label = target.capitalize()
-            return _pick(f"smart_home_{state}", device=label)
+            return pick("smart_home", state, device=label)
         except Exception:
-            return _pick("smart_home_error", device=target.capitalize())
+            return pick("smart_home", "error", device=target.capitalize())
+
+    # ── Analyze screen ──────────────────────────────────────────
+
+    OLLAMA_URL = "http://localhost:11434"
+    LLM_MODEL = "llama3.2"
+
+    def _do_analyze_screen(self, target, args):
+        t = self._speak_async(pick("analyze_screen", "loading"))
+
+        # Resolve monitor
+        name = target.strip().lower() if target else ""
+        name = MONITOR_ALIASES.get(name, name)
+        if name and name not in MONITORS:
+            if t:
+                t.join()
+            return f"Monitor '{target}' não encontrado, Senhor."
+
+        try:
+            # Capture screenshot
+            img_path = "/tmp/orion_screen_analyze.png"
+            full_path = "/tmp/orion_screen_full.png"
+            if name:
+                x, y, w, h = MONITORS[name]
+                # Capture full screen, then crop to monitor region
+                subprocess.run(
+                    ["scrot", full_path, "--overwrite"], capture_output=True
+                )
+                if not os.path.isfile(full_path):
+                    subprocess.run(
+                        ["gnome-screenshot", "-f", full_path],
+                        capture_output=True,
+                    )
+                if os.path.isfile(full_path):
+                    subprocess.run(
+                        ["convert", full_path,
+                         "-crop", f"{w}x{h}+{x}+{y}", "+repage", img_path],
+                        capture_output=True,
+                    )
+                    os.remove(full_path)
+            else:
+                # Full screen capture
+                subprocess.run(
+                    ["scrot", img_path, "--overwrite"], capture_output=True
+                )
+                if not os.path.isfile(img_path):
+                    subprocess.run(
+                        ["gnome-screenshot", "-f", img_path],
+                        capture_output=True,
+                    )
+
+            if not os.path.isfile(img_path):
+                if t:
+                    t.join()
+                return "Falha na captura de tela, Senhor."
+
+            with open(img_path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode()
+
+            # Unload LLM to free VRAM
+            requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={"model": self.LLM_MODEL, "keep_alive": 0},
+                timeout=10,
+            )
+            time.sleep(1)
+
+            if t:
+                t.join()
+
+            # Analyze with vision model
+            question = self._original_text
+            r = requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": VISION_MODEL,
+                    "prompt": (
+                        f"Pergunta do usuário: \"{question}\"\n\n"
+                        "Descreva o que você vê na tela de forma concisa em português do Brasil. "
+                        "Foque no conteúdo principal visível. Máximo 4 frases."
+                    ),
+                    "images": [img_b64],
+                    "stream": False,
+                    "options": {"num_predict": 150},
+                },
+                timeout=60,
+            )
+            r.raise_for_status()
+            analysis = r.json()["response"].strip()
+
+            # Unload vision model, reload LLM
+            requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={"model": VISION_MODEL, "keep_alive": 0},
+                timeout=10,
+            )
+            requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.LLM_MODEL,
+                    "prompt": "ok",
+                    "keep_alive": -1,
+                    "stream": False,
+                    "options": {"num_predict": 1},
+                },
+                timeout=30,
+            )
+
+            os.remove(img_path)
+            return analysis
+
+        except Exception as e:
+            print(f"  Erro na análise de tela: {e}")
+            # Ensure LLM is back
+            try:
+                requests.post(
+                    f"{self.OLLAMA_URL}/api/generate",
+                    json={
+                        "model": self.LLM_MODEL,
+                        "prompt": "ok",
+                        "keep_alive": -1,
+                        "stream": False,
+                        "options": {"num_predict": 1},
+                    },
+                    timeout=30,
+                )
+            except Exception:
+                pass
+            return "Falha na análise visual, Senhor."
+
+    # ── Demo hacker ──────────────────────────────────────────────
+
+    DEMO_DURATION = 30
+
+    DEMO_BASH_EFFECTS = [
+        # Fake access log
+        r"""bash -c 'while true; do printf "\033[33m%s \033[36m[%s] \033[0m%s %s/%s \033[32m%s\033[0m\n" \
+            "$(date +%H:%M:%S)" \
+            "$(shuf -n1 -e INFO WARN DEBUG TRACE)" \
+            "$(shuf -n1 -e GET POST PUT DELETE PATCH)" \
+            "$(shuf -n1 -e /api /auth /data /sys /core)" \
+            "$(shuf -n1 -e login sync status config deploy scan)" \
+            "$(shuf -n1 -e 200 201 301 403 404 500)"; sleep 0.04; done'""",
+        # Fake port scan
+        r"""bash -c 'while true; do printf "\033[31m[SCAN]\033[0m %s:%d \033[33m%-8s\033[0m %s\n" \
+            "$(printf "%d.%d.%d.%d" $((RANDOM%255)) $((RANDOM%255)) $((RANDOM%255)) $((RANDOM%255)))" \
+            "$((RANDOM%65535))" \
+            "$(shuf -n1 -e OPEN CLOSED FILTERED)" \
+            "$(shuf -n1 -e ssh http ftp smtp dns rdp vnc telnet)"; sleep 0.06; done'""",
+        # Hex stream
+        r"""bash -c 'while true; do printf "\033[32m%04x: " $((RANDOM%65535)); \
+            for i in $(seq 1 16); do printf "%02x " $((RANDOM%256)); done; \
+            printf "\033[0m\n"; sleep 0.03; done'""",
+        # Fake compilation
+        r"""bash -c 'while true; do printf "\033[36m[%s]\033[0m Compiling %s v%d.%d.%d (%s)\n" \
+            "$(date +%H:%M:%S)" \
+            "$(shuf -n1 -e orion_core neural_net crypto_engine quantum_sim payload_gen)" \
+            "$((RANDOM%5))" "$((RANDOM%20))" "$((RANDOM%99))" \
+            "$(shuf -n1 -e src/lib.rs src/main.rs core/engine.c net/proto.go)"; sleep 0.08; done'""",
+    ]
+
+    def _get_demo_effects(self):
+        effects = []
+        if shutil.which("cmatrix"):
+            effects.append("cmatrix -b -u 2 -C green")
+            effects.append("cmatrix -b -u 1 -C red")
+        if shutil.which("genact"):
+            effects.append("genact -m cargo")
+            effects.append("genact -m botnet")
+            effects.append("genact -m cryptomining")
+        if shutil.which("hollywood"):
+            effects.append("hollywood")
+        effects.extend(self.DEMO_BASH_EFFECTS)
+        random.shuffle(effects)
+        return effects[:6]
+
+    def _find_window_by_title(self, title):
+        for _ in range(20):
+            time.sleep(0.15)
+            result = subprocess.run(
+                ["wmctrl", "-l"], capture_output=True, text=True
+            )
+            for line in result.stdout.strip().split("\n"):
+                if title in line:
+                    return line.split()[0]
+        return None
+
+    def _do_demo(self, target, args):
+        reply = pick("demo")
+        t = self._speak_async(reply)
+        threading.Thread(target=self._run_demo, daemon=True).start()
+        if t:
+            t.join()
+        return None
+
+    def _run_demo(self):
+        if not shutil.which("xdotool"):
+            return
+
+        effects = self._get_demo_effects()
+        n = len(effects)
+        wids = []
+        procs = []
+
+        # Center of the ultrawide (primary monitor)
+        cx, cy = 1280, 450
+        win_w, win_h = 520, 360
+
+        # Phase 1: Spawn terminals in cascade
+        for i, effect in enumerate(effects):
+            title = f"ORION-DEMO-{i}"
+            proc = subprocess.Popen(
+                [
+                    "gnome-terminal",
+                    f"--title={title}",
+                    "--hide-menubar",
+                    "--",
+                    "bash", "-c", f"{effect}; sleep 999",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            procs.append(proc)
+            wid = self._find_window_by_title(title)
+            if wid:
+                wids.append(wid)
+                # Remove maximize, set size, start stacked at center
+                subprocess.run(
+                    ["xdotool", "windowsize", wid, str(win_w), str(win_h)],
+                    capture_output=True,
+                )
+                subprocess.run(
+                    ["xdotool", "windowmove", wid,
+                     str(cx - win_w // 2 + i * 30),
+                     str(cy - win_h // 2 + i * 20)],
+                    capture_output=True,
+                )
+
+        if not wids:
+            return
+
+        n = len(wids)
+        start = time.time()
+
+        # Phase 2 + 3: Animate
+        while time.time() - start < self.DEMO_DURATION:
+            t = time.time() - start
+
+            for i, wid in enumerate(wids):
+                phase = i * (2 * math.pi / n)
+
+                if t < 3:
+                    # Spread out from center
+                    progress = t / 3
+                    ease = progress * (2 - progress)  # ease-out
+                    radius_x = 600 * ease
+                    radius_y = 280 * ease
+                    angle = phase
+                    x = int(cx + radius_x * math.cos(angle) - win_w // 2)
+                    y = int(cy + radius_y * math.sin(angle) - win_h // 2)
+                elif t > self.DEMO_DURATION - 3:
+                    # Collapse back to center
+                    remaining = (self.DEMO_DURATION - t) / 3
+                    ease = remaining * (2 - remaining)
+                    radius_x = 600 * ease
+                    radius_y = 280 * ease
+                    speed = 1.2
+                    angle = phase + t * speed
+                    x = int(cx + radius_x * math.cos(angle) - win_w // 2)
+                    y = int(cy + radius_y * math.sin(angle) - win_h // 2)
+                else:
+                    # Orbital juggling with breathing radius
+                    speed = 1.2
+                    angle = phase + t * speed
+                    rx = 600 + 150 * math.sin(t * 0.4)
+                    ry = 280 + 80 * math.cos(t * 0.3)
+                    x = int(cx + rx * math.cos(angle) - win_w // 2)
+                    y = int(cy + ry * math.sin(angle) - win_h // 2)
+
+                x = max(0, min(x, 4200))
+                y = max(0, min(y, 1800))
+
+                subprocess.run(
+                    ["xdotool", "windowmove", wid, str(x), str(y)],
+                    capture_output=True,
+                )
+
+            time.sleep(0.03)
+
+        # Phase 4: Distribute terminals evenly on screen
+        spacing = (2560 - win_w) // max(n - 1, 1)
+        for i, wid in enumerate(wids):
+            x = i * spacing
+            y = (cy - win_h // 2) + (50 if i % 2 else 0)
+            subprocess.run(
+                ["xdotool", "windowmove", wid, str(x), str(y)],
+                capture_output=True,
+            )
 
     def _do_chat(self, target, args):
         return None

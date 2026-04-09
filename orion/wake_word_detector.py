@@ -1,19 +1,23 @@
+import collections
 import threading
 import time
 
-import noisereduce as nr
 import numpy as np
 import sounddevice as sd
+
+from orion.audio_utils import clean_audio
 
 
 class WakeWordDetector:
     SAMPLE_RATE = 16000
-    BLOCK_SIZE = 800  # 50ms (igual ao SpeechRecognizer)
+    BLOCK_SIZE = 800  # 50ms
     BUFFER_SECONDS = 3.0
-    MIN_SPEECH_SEC = 0.25
-    SILENCE_AFTER_SEC = 0.5
+    MIN_SPEECH_SEC = 0.12
+    SILENCE_AFTER_SEC = 0.35
     COOLDOWN_SEC = 3.0
-    CALIBRATION_WINDOW = 100
+    CALIBRATION_WINDOW = 80
+    # Pre-buffer: keeps audio BEFORE speech starts (captures word onset)
+    PRE_BUFFER_BLOCKS = 6  # 300ms
 
     def __init__(self, on_activate, whisper_model):
         self.on_activate = on_activate
@@ -24,6 +28,7 @@ class WakeWordDetector:
         self._speech_start = None
         self._silence_start = None
         self._buffer = []
+        self._pre_buffer = collections.deque(maxlen=self.PRE_BUFFER_BLOCKS)
         self._checking = False
         self._noise_history = []
 
@@ -33,7 +38,7 @@ class WakeWordDetector:
         if len(self._noise_history) > self.CALIBRATION_WINDOW:
             self._noise_history.pop(0)
         noise_floor = np.percentile(self._noise_history, 50)
-        self._threshold = max(noise_floor * 3.5, 0.01)
+        self._threshold = max(noise_floor * 2.5, 0.008)
 
     def _audio_callback(self, indata, frames, time_info, status):
         energy = np.sqrt(np.mean(indata**2))
@@ -41,10 +46,13 @@ class WakeWordDetector:
 
         if self._speech_start is None:
             self._update_noise_floor(energy)
+            self._pre_buffer.append(indata.copy())
 
         if energy > self._threshold:
             if self._speech_start is None:
                 self._speech_start = now
+                # Prepend pre-buffer to capture word onset
+                self._buffer = list(self._pre_buffer)
             self._silence_start = None
             self._buffer.append(indata.copy())
             max_blocks = int(
@@ -76,33 +84,30 @@ class WakeWordDetector:
 
     def _check(self, audio):
         try:
-            audio = nr.reduce_noise(
-                y=audio,
-                sr=self.SAMPLE_RATE,
-                prop_decrease=0.8,
-                stationary=True,
-            )
+            audio = clean_audio(audio, self.SAMPLE_RATE, prop_decrease=0.5)
             segments, _ = self.model.transcribe(
                 audio,
                 language="pt",
-                beam_size=1,
+                beam_size=3,
                 temperature=0,
                 without_timestamps=True,
-                vad_filter=True,
+                vad_filter=False,
                 initial_prompt="Orion",
             )
             text = " ".join(seg.text for seg in segments).strip().lower()
 
-            if not text or len(text) > 40:
+            if not text or len(text) > 50:
                 return
             words = text.split()
-            if len(words) > 2 and len(set(words)) <= len(words) // 2:
+            if len(words) > 3 and len(set(words)) <= len(words) // 2:
                 return
 
             if any(w in text for w in (
                 "orion", "órion", "orian", "orião",
                 "oriom", "oreon", "ório",
                 "oriam", "aurion", "oryon",
+                "oriel", "órien", "orient",
+                "oh ryan", "o ryan",
             )):
                 print(f"  [Wake word: \"{text}\"]")
                 self._last_activate = time.time()
@@ -116,6 +121,7 @@ class WakeWordDetector:
         self._speech_start = None
         self._silence_start = None
         self._buffer = []
+        self._pre_buffer = collections.deque(maxlen=self.PRE_BUFFER_BLOCKS)
         self._checking = False
         self._noise_history = []
         self._stream = sd.InputStream(

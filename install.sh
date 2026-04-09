@@ -32,6 +32,9 @@ sudo apt-get install -y -qq \
     pulseaudio-utils \
     ffmpeg \
     wmctrl \
+    xdotool \
+    scrot \
+    imagemagick \
     curl \
     wget
 
@@ -58,6 +61,9 @@ fi
 
 info "Baixando modelo llama3.2..."
 ollama pull llama3.2
+
+info "Baixando modelo moondream (visão)..."
+ollama pull moondream
 
 # ── 4. Piper TTS ────────────────────────────────────────────────────
 mkdir -p "$PIPER_BIN_DIR" "$PIPER_DIR"
@@ -100,7 +106,7 @@ echo ""
 info "Verificando instalacao..."
 echo ""
 OK=true
-for pkg in portaudio19-dev libsndfile1 espeak-ng pulseaudio-utils ffmpeg wmctrl; do
+for pkg in portaudio19-dev libsndfile1 espeak-ng pulseaudio-utils ffmpeg wmctrl xdotool scrot imagemagick; do
     if dpkg -s "$pkg" &>/dev/null; then
         echo "  $pkg: OK"
     else

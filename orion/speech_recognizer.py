@@ -1,9 +1,10 @@
 import time
 
-import noisereduce as nr
 import numpy as np
 import sounddevice as sd
 from faster_whisper import WhisperModel
+
+from orion.audio_utils import clean_audio
 
 
 class SpeechRecognizer:
@@ -98,29 +99,43 @@ class SpeechRecognizer:
             return ""
 
         audio = np.concatenate(chunks, axis=0).flatten().astype(np.float32)
-        audio = nr.reduce_noise(
-            y=audio,
-            y_noise=self._noise_profile,
-            sr=self.SAMPLE_RATE,
-            prop_decrease=0.8,
-            stationary=True,
-        )
+        audio = clean_audio(audio, self.SAMPLE_RATE, noise_profile=self._noise_profile)
 
         t0 = time.time()
         segments, _ = self.model.transcribe(
             audio,
             language="pt",
-            beam_size=1,
+            beam_size=3,
             temperature=0,
             condition_on_previous_text=False,
             vad_filter=True,
             vad_parameters=dict(min_speech_duration_ms=250),
             without_timestamps=True,
+            initial_prompt=(
+                "Orion, que horas são? Abre o Chrome. Fecha tudo. "
+                "Desliga o computador. Liga a luz da varanda. "
+                "Pesquisa sobre. Aumenta o volume. Faz uma demonstração."
+            ),
         )
         parts = []
         for seg in segments:
             if seg.no_speech_prob < 0.6:
                 parts.append(seg.text)
         text = " ".join(parts).strip()
+        text = self._fix_transcription(text)
         print(f"  Transcrição: {time.time() - t0:.2f}s")
+        return text
+
+    TRANSCRIPTION_FIXES = {
+        "oração": "horas são",
+        "que oração": "que horas são",
+        "orações": "horas são",
+    }
+
+    def _fix_transcription(self, text):
+        lower = text.lower()
+        for wrong, right in self.TRANSCRIPTION_FIXES.items():
+            if wrong in lower:
+                import re
+                text = re.sub(re.escape(wrong), right, text, flags=re.IGNORECASE)
         return text
