@@ -45,6 +45,7 @@ info "Criando ambiente virtual Python..."
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip -q
+pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu124 -q
 pip install -r requirements.txt -q
 
 # ── 3. Ollama ───────────────────────────────────────────────────────
@@ -61,8 +62,8 @@ if ! pgrep -f "ollama serve" &>/dev/null; then
     sleep 3
 fi
 
-info "Baixando modelo llama3.2..."
-ollama pull llama3.2
+info "Baixando modelo qwen2.5:1.5b..."
+ollama pull qwen2.5:1.5b
 
 info "Baixando modelo moondream (visão)..."
 ollama pull moondream
@@ -103,6 +104,20 @@ else
     info "Modelo de voz pt-BR ja instalado."
 fi
 
+# ── 6. XTTS v2 (download do modelo) ─────────────────────────────────
+XTTS_DIR="$HOME/.local/share/tts/tts_models--multilingual--multi-dataset--xtts_v2"
+if [ ! -f "$XTTS_DIR/model.pth" ]; then
+    info "Baixando modelo XTTS v2..."
+    mkdir -p "$XTTS_DIR"
+    XTTS_BASE="https://huggingface.co/coqui/XTTS-v2/resolve/main"
+    for f in config.json vocab.json speakers_xtts.pth model.pth; do
+        wget -q "$XTTS_BASE/$f" -O "$XTTS_DIR/$f"
+    done
+    echo "I agree to the terms of the CPML license." > "$XTTS_DIR/tos_agreed.txt"
+else
+    info "XTTS v2 ja instalado."
+fi
+
 # ── Verificacao final ────────────────────────────────────────────────
 echo ""
 info "Verificando instalacao..."
@@ -119,8 +134,9 @@ done
 command -v ollama &>/dev/null && echo "  ollama: OK" || { echo "  ollama: FALHOU"; OK=false; }
 [ -f "$PIPER_BIN_DIR/piper" ] && echo "  piper: OK" || { echo "  piper: FALHOU"; OK=false; }
 [ -f "$PIPER_DIR/${PIPER_VOICE}.onnx" ] && echo "  voz pt-BR: OK" || { echo "  voz pt-BR: FALHOU"; OK=false; }
+[ -f "$XTTS_DIR/model.pth" ] && echo "  xtts v2: OK" || { echo "  xtts v2: FALHOU"; OK=false; }
 source .venv/bin/activate
-python -c "import sounddevice, soundfile, numpy, requests, faster_whisper" 2>/dev/null && echo "  python deps: OK" || { echo "  python deps: FALHOU"; OK=false; }
+python -c "import sounddevice, soundfile, numpy, requests, faster_whisper, TTS, torch" 2>/dev/null && echo "  python deps: OK" || { echo "  python deps: FALHOU"; OK=false; }
 
 echo ""
 if $OK; then

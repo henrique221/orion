@@ -55,7 +55,7 @@ def _build_system_prompt():
 
 class CommandInterpreter:
     OLLAMA_URL = "http://localhost:11434"
-    MODEL = "llama3.2"
+    MODEL = "qwen2.5:1.5b"
     MAX_HISTORY = 10
     CLEANUP_EVERY = 10  # Run cleanup every N interactions
     MEMORY_DIR = os.path.expanduser("~/.local/share/orion")
@@ -358,7 +358,7 @@ class CommandInterpreter:
             print(f"  AVISO: Erro ao verificar Ollama: {e}")
 
     def _warmup(self):
-        """Pré-carrega o modelo na GPU para evitar cold start."""
+        """Pré-carrega o modelo na CPU para evitar cold start."""
         try:
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
@@ -369,9 +369,9 @@ class CommandInterpreter:
                     "stream": False,
                     "options": {"num_predict": 1},
                 },
-                timeout=30,
+                timeout=120,
             )
-            print("  Modelo LLM pré-carregado na GPU.")
+            print("  Modelo LLM pré-carregado.")
         except Exception:
             pass
 
@@ -403,7 +403,7 @@ class CommandInterpreter:
                         "num_predict": 300,
                     },
                 },
-                timeout=30,
+                timeout=60,
             )
             response.raise_for_status()
             result = response.json()
