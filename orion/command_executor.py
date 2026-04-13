@@ -133,7 +133,7 @@ class CommandExecutor:
                         "Trate-o por Senhor. Máximo 5 frases."
                     ),
                     "stream": False,
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "options": {"temperature": 0.3, "num_predict": 200},
                 },
                 timeout=20,
@@ -309,64 +309,72 @@ class CommandExecutor:
     def _do_start_work(self, target, args):
         self._ensure_unlocked()
 
-        # Frase motivacional enquanto abre workspace 1
-        quote = self._motivational_quote()
-        t = self._speak_async(quote)
+        # Desabilitar interrupção durante abertura dos workspaces
+        if self._tts:
+            self._tts.allow_interrupt = False
 
-        # Workspace 1: Chrome com Slack + Cursor com skyportal
-        subprocess.Popen(
-            [
-                "google-chrome",
-                "--new-window",
-                "--window-position=2560,0",
-                "--window-size=1920,1080",
-                "https://app.slack.com/client/T07PM9G3D9T",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        self._open_cursor_on_ultrawide("~/gitdocs/skyportal-website")
+        try:
+            # Frase motivacional enquanto abre workspace 1
+            quote = self._motivational_quote()
+            t = self._speak_async(quote)
 
-        if t:
-            t.join()
-        # Frase de loading enquanto abre workspace 2
-        t = self._speak_async(pick("start_work", "loading"))
+            # Workspace 1: Chrome com Slack + Cursor com skyportal
+            subprocess.Popen(
+                [
+                    "google-chrome",
+                    "--new-window",
+                    "--window-position=2560,0",
+                    "--window-size=1920,1080",
+                    "https://app.slack.com/client/T07PM9G3D9T",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            self._open_cursor_on_ultrawide("~/gitdocs/skyportal-website")
 
-        time.sleep(3)
-        subprocess.run(["wmctrl", "-s", "1"], capture_output=True)
-        time.sleep(0.5)
-        subprocess.Popen(
-            [
-                "google-chrome",
-                "--new-window",
-                "--window-position=2560,0",
-                "--window-size=1920,1080",
-                "https://app.slack.com/client/T04KMP7QU",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        self._open_cursor_on_ultrawide("~/gitdocs/gloo")
+            if t:
+                t.join()
+            # Frase de loading enquanto abre workspace 2
+            t = self._speak_async(pick("start_work", "loading"))
 
-        if t:
-            t.join()
-        return pick("start_work", "done")
+            time.sleep(3)
+            subprocess.run(["wmctrl", "-s", "1"], capture_output=True)
+            time.sleep(0.5)
+            subprocess.Popen(
+                [
+                    "google-chrome",
+                    "--new-window",
+                    "--window-position=2560,0",
+                    "--window-size=1920,1080",
+                    "https://app.slack.com/client/T04KMP7QU",
+                ],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            self._open_cursor_on_ultrawide("~/gitdocs/gloo")
+
+            if t:
+                t.join()
+            return pick("start_work", "done")
+        finally:
+            if self._tts:
+                self._tts.allow_interrupt = True
 
     def _motivational_quote(self):
         try:
             r = requests.post(
                 "http://localhost:11434/api/generate",
                 json={
-                    "model": "llama3.2",
+                    "model": self.LLM_MODEL,
                     "prompt": (
                         "Você é uma IA sofisticada como o J.A.R.V.I.S. Gere uma frase curta "
                         "e inspiradora em português do Brasil para seu mestre começar a trabalhar. "
                         "MÁXIMO 8 palavras. Tom confiante e elegante. Sem aspas. Só a frase."
                     ),
                     "stream": False,
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "options": {"temperature": 0.9, "num_predict": 25},
                 },
                 timeout=15,
@@ -515,7 +523,7 @@ class CommandExecutor:
                         "Trate o usuário por Senhor. Máximo 3 frases curtas."
                     ),
                     "stream": False,
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "options": {"temperature": 0.3, "num_predict": 80},
                 },
                 timeout=15,
@@ -583,7 +591,7 @@ class CommandExecutor:
                         "Trate-o por Senhor. Máximo 4 frases curtas e diretas."
                     ),
                     "stream": False,
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "options": {"temperature": 0.3, "num_predict": 150},
                 },
                 timeout=15,
@@ -793,7 +801,7 @@ class CommandExecutor:
     # ── Analyze screen ──────────────────────────────────────────
 
     OLLAMA_URL = "http://localhost:11434"
-    LLM_MODEL = "llama3.2"
+    LLM_MODEL = "qwen2.5:1.5b"
 
     MOUSE_REGION_SIZE = (800, 600)  # Area around cursor to capture
 
@@ -866,15 +874,17 @@ class CommandExecutor:
             with open(img_path, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode()
 
-            # Stage 2: Swap models
+            # Stage 2: Swap models — liberar VRAM para o modelo de visão
             self._speak_sync(pick("analyze_screen", "swapping"))
-            print("  Descarregando LLM para liberar VRAM...")
+            print("  Liberando VRAM para modelo de visão...")
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={"model": self.LLM_MODEL, "keep_alive": 0},
                 timeout=10,
             )
-            time.sleep(2)
+            if self._tts:
+                self._tts.free_vram()
+            time.sleep(1)
 
             # Stage 3: Analyze — vision model extracts all text/content
             self._speak_sync(pick("analyze_screen", "analyzing"))
@@ -898,27 +908,18 @@ class CommandExecutor:
             analysis = r.json()["response"].strip()
             print(f"  Análise bruta: {analysis}")
 
-            # Stage 4: Restore LLM
+            # Stage 4: Restore models
             self._speak_sync(pick("analyze_screen", "restoring"))
-            print("  Restaurando LLM...")
+            print("  Restaurando modelos...")
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={"model": VISION_MODEL, "keep_alive": 0},
                 timeout=10,
             )
             time.sleep(1)
-            requests.post(
-                f"{self.OLLAMA_URL}/api/generate",
-                json={
-                    "model": self.LLM_MODEL,
-                    "prompt": "ok",
-                    "keep_alive": -1,
-                    "stream": False,
-                    "options": {"num_predict": 1},
-                },
-                timeout=30,
-            )
-            print("  LLM restaurado.")
+            if self._tts:
+                self._tts.reclaim_vram()
+            print("  Modelos restaurados.")
 
             os.remove(img_path)
 
@@ -948,7 +949,7 @@ class CommandExecutor:
                         "Máximo 5 frases. Foque no que foi pedido."
                     ),
                     "stream": False,
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "options": {"temperature": 0.3, "num_predict": 200},
                 },
                 timeout=20,
@@ -1044,7 +1045,7 @@ class CommandExecutor:
                         "Foque no que foi pedido."
                     ),
                     "stream": False,
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "options": {"temperature": 0.3, "num_predict": 300},
                 },
                 timeout=20,
@@ -1068,7 +1069,7 @@ class CommandExecutor:
                 json={
                     "model": self.LLM_MODEL,
                     "prompt": "ok",
-                    "keep_alive": -1,
+                    "keep_alive": 0,
                     "stream": False,
                     "options": {"num_predict": 1},
                 },
@@ -1650,4 +1651,32 @@ class CommandExecutor:
         )
 
     def _do_chat(self, target, args):
+        """Gera resposta conversacional usando o LLM."""
+        try:
+            prompt = (
+                "Você é Orion, IA inspirada no J.A.R.V.I.S. do Tony Stark. "
+                "Tom: formal britânico com humor seco e sutil. "
+                "Trate o usuário por 'Senhor' ou 'senhor Borges'. "
+                "Nunca use emojis. "
+                f"O usuário disse: \"{self._original_text}\"\n"
+                "Responda de forma natural, inteligente e concisa (máximo 30 palavras). "
+                "Apenas o texto da resposta falada, sem aspas, sem JSON."
+            )
+            r = requests.post(
+                f"{self.OLLAMA_URL}/api/generate",
+                json={
+                    "model": self.LLM_MODEL,
+                    "prompt": prompt,
+                    "stream": False,
+                    "keep_alive": 0,
+                    "options": {"temperature": 0.7, "num_predict": 80},
+                },
+                timeout=15,
+            )
+            r.raise_for_status()
+            response = r.json().get("response", "").strip().strip('"\'')
+            if response and len(response) > 5:
+                return response
+        except Exception as e:
+            print(f"  Erro no chat: {e}")
         return None

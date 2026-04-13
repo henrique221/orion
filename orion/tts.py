@@ -99,6 +99,24 @@ class TTS:
             else:
                 print("  AVISO: Nenhum TTS disponível.")
 
+    def free_vram(self):
+        """Move XTTS para CPU temporariamente para liberar VRAM."""
+        if self._xtts_model and self._has_cuda:
+            import torch
+            self._xtts_model.cpu()
+            self._xtts_gpt_latent = self._xtts_gpt_latent.cpu()
+            self._xtts_speaker_emb = self._xtts_speaker_emb.cpu()
+            torch.cuda.empty_cache()
+            print("  XTTS movido para CPU.")
+
+    def reclaim_vram(self):
+        """Move XTTS de volta para GPU."""
+        if self._xtts_model and self._has_cuda:
+            self._xtts_model.cuda()
+            self._xtts_gpt_latent = self._xtts_gpt_latent.cuda()
+            self._xtts_speaker_emb = self._xtts_speaker_emb.cuda()
+            print("  XTTS movido para GPU.")
+
     def speak(self, text):
         if not text:
             return

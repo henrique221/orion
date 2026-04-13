@@ -4,13 +4,13 @@ from scipy.signal import butter, sosfilt
 
 
 # Human voice frequency range
-VOICE_LOW_HZ = 80
-VOICE_HIGH_HZ = 3000
+VOICE_LOW_HZ = 100
+VOICE_HIGH_HZ = 3400
 FILTER_ORDER = 5
 
 
 def bandpass_filter(audio, sr, low=VOICE_LOW_HZ, high=VOICE_HIGH_HZ):
-    """Filters audio to keep only human voice frequencies (80-3000 Hz).
+    """Filters audio to keep only human voice frequencies (100-3400 Hz).
 
     Removes low-frequency rumble (fans, AC, traffic) and
     high-frequency noise (electronics, hiss).
@@ -20,7 +20,7 @@ def bandpass_filter(audio, sr, low=VOICE_LOW_HZ, high=VOICE_HIGH_HZ):
     return sosfilt(sos, audio).astype(np.float32)
 
 
-def clean_audio(audio, sr, noise_profile=None, prop_decrease=0.6):
+def clean_audio(audio, sr, noise_profile=None, prop_decrease=0.8):
     """Full audio cleanup pipeline: band-pass filter + noise reduction."""
     # Step 1: Band-pass filter to isolate voice frequencies
     audio = bandpass_filter(audio, sr)
@@ -40,7 +40,7 @@ def clean_audio(audio, sr, noise_profile=None, prop_decrease=0.6):
             y=audio,
             sr=sr,
             prop_decrease=prop_decrease,
-            stationary=True,
+            stationary=False,
         )
 
     return audio

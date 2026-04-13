@@ -13,8 +13,7 @@ from orion.tts import TTS
 from orion.wake_word_detector import WakeWordDetector
 
 WAKE_WORD_PATTERN = re.compile(
-    r"^(?:orion|órion|orian|orião|oriom|oreon|ório|oriam|aurion|oryon)"
-    r"[,.!?\s]*",
+    r"^[oó]r[iye](?:ão|[oa][nm]?)[,.!?\s]*",
     re.IGNORECASE,
 )
 

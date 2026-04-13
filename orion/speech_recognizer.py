@@ -5,16 +5,21 @@ import sounddevice as sd
 from faster_whisper import WhisperModel
 
 from orion.audio_utils import clean_audio
+from orion.vad import VoiceActivityDetector
 
 
 class SpeechRecognizer:
     SAMPLE_RATE = 16000
-    CHUNK_DURATION = 0.05
+    CHUNK_SIZE = 512  # 32ms — Silero VAD native window
+    CHUNK_DURATION = 512 / 16000  # 0.032s
     SILENCE_TIMEOUT = 1.5
     MAX_DURATION = 15.0
     INITIAL_SILENCE_TIMEOUT = 8.0
     MIN_SPEECH_DURATION = 0.3
     GRACE_PERIOD = 0.5
+    # Silero VAD threshold — slightly higher than wake word to avoid
+    # capturing noise during active recording
+    VAD_THRESHOLD = 0.4
 
     def __init__(self):
         print("  Carregando modelo Whisper (large-v3) na GPU...")
@@ -22,44 +27,42 @@ class SpeechRecognizer:
             "large-v3", device="cuda", compute_type="int8_float16"
         )
         print("  Whisper pronto (CUDA).")
-        self.silence_threshold = self._calibrate_noise()
+        print("  Carregando Silero VAD (recognizer)...")
+        self._vad = VoiceActivityDetector(threshold=self.VAD_THRESHOLD)
+        print("  Silero VAD pronto.")
+        self._noise_profile = self._calibrate_noise()
 
     def _calibrate_noise(self):
-        """Mede o ruído ambiente por 1s e define o threshold."""
+        """Mede o ruído ambiente por 1s e captura perfil para redutor."""
         print("  Calibrando ruído ambiente...", end=" ")
-        chunk_size = int(self.SAMPLE_RATE * self.CHUNK_DURATION)
+        chunk_size = self.CHUNK_SIZE
         noise_chunks = []
-        energies = []
         with sd.InputStream(
             samplerate=self.SAMPLE_RATE, channels=1, blocksize=chunk_size
         ) as stream:
             for _ in range(int(1.0 / self.CHUNK_DURATION)):
                 data, _ = stream.read(chunk_size)
                 noise_chunks.append(data.copy())
-                energies.append(np.sqrt(np.mean(data**2)))
-        self.noise_floor = np.mean(energies)
-        self._noise_profile = np.concatenate(noise_chunks, axis=0).flatten().astype(np.float32)
-        threshold = max(self.noise_floor * 3, 0.008)
-        print(f"ruído={self.noise_floor:.4f}, threshold={threshold:.4f}")
-        return threshold
+        noise_profile = np.concatenate(noise_chunks, axis=0).flatten().astype(np.float32)
+        print(f"perfil capturado ({len(noise_profile)} amostras)")
+        return noise_profile
 
     def record_and_transcribe(self):
-        chunk_size = int(self.SAMPLE_RATE * self.CHUNK_DURATION)
+        chunk_size = self.CHUNK_SIZE
         chunks = []
         silence_start = None
         has_speech = False
         start_time = time.time()
+        speech_frames = 0
+        self._vad.reset()
 
         print("  Ouvindo...")
-
-        speech_frames = 0
 
         with sd.InputStream(
             samplerate=self.SAMPLE_RATE, channels=1, blocksize=chunk_size
         ) as stream:
             while True:
                 data, _ = stream.read(chunk_size)
-                energy = np.sqrt(np.mean(data**2))
                 elapsed = time.time() - start_time
 
                 # Skip grace period to avoid TTS audio bleed
@@ -68,7 +71,11 @@ class SpeechRecognizer:
 
                 chunks.append(data.copy())
 
-                if energy >= self.silence_threshold:
+                is_speech = self._vad.is_speech(
+                    data.flatten().astype(np.float32)
+                )
+
+                if is_speech:
                     has_speech = True
                     speech_frames += 1
                     silence_start = None
