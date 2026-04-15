@@ -104,6 +104,17 @@ else
     info "Modelo de voz pt-BR ja instalado."
 fi
 
+# ── 5b. Modelo de voz en-US ─────────────────────────────────────────
+EN_VOICE="en_US-lessac-medium"
+if [ ! -f "$PIPER_DIR/${EN_VOICE}.onnx" ]; then
+    info "Baixando modelo de voz en-US..."
+    EN_VOICE_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US/lessac/medium"
+    wget -q "${EN_VOICE_BASE}/${EN_VOICE}.onnx" -O "$PIPER_DIR/${EN_VOICE}.onnx"
+    wget -q "${EN_VOICE_BASE}/${EN_VOICE}.onnx.json" -O "$PIPER_DIR/${EN_VOICE}.onnx.json"
+else
+    info "Modelo de voz en-US ja instalado."
+fi
+
 # ── 6. XTTS v2 (download do modelo) ─────────────────────────────────
 XTTS_DIR="$HOME/.local/share/tts/tts_models--multilingual--multi-dataset--xtts_v2"
 if [ ! -f "$XTTS_DIR/model.pth" ]; then
@@ -134,9 +145,10 @@ done
 command -v ollama &>/dev/null && echo "  ollama: OK" || { echo "  ollama: FALHOU"; OK=false; }
 [ -f "$PIPER_BIN_DIR/piper" ] && echo "  piper: OK" || { echo "  piper: FALHOU"; OK=false; }
 [ -f "$PIPER_DIR/${PIPER_VOICE}.onnx" ] && echo "  voz pt-BR: OK" || { echo "  voz pt-BR: FALHOU"; OK=false; }
+[ -f "$PIPER_DIR/${EN_VOICE}.onnx" ] && echo "  voz en-US: OK" || { echo "  voz en-US: FALHOU"; OK=false; }
 [ -f "$XTTS_DIR/model.pth" ] && echo "  xtts v2: OK" || { echo "  xtts v2: FALHOU"; OK=false; }
 source .venv/bin/activate
-python -c "import sounddevice, soundfile, numpy, requests, faster_whisper, TTS, torch, flask" 2>/dev/null && echo "  python deps: OK" || { echo "  python deps: FALHOU"; OK=false; }
+python -c "import sounddevice, soundfile, numpy, requests, faster_whisper, TTS, torch, flask, yaml" 2>/dev/null && echo "  python deps: OK" || { echo "  python deps: FALHOU"; OK=false; }
 
 echo ""
 if $OK; then

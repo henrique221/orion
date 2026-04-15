@@ -14,6 +14,7 @@
 | torch | >=2.6.0 | PyTorch (CUDA index: cu124) |
 | torchaudio | >=2.6.0 | Audio utilities for PyTorch |
 | flask | >=3.0.0 | Web settings panel (UI) |
+| pyyaml | >=6.0 | Read/write config.yaml (config.py) |
 
 **Note**: torch/torchaudio installed from CUDA 12.4 index: `https://download.pytorch.org/whl/cu124`
 
@@ -82,8 +83,9 @@
 | Setting | Value |
 |---------|-------|
 | Binary | ~/.local/bin/piper |
-| Model | ~/.local/share/piper/pt_BR-faber-medium.onnx |
-| Source | HuggingFace (rhasspy/piper) |
+| Model (pt-BR) | ~/.local/share/piper/pt_BR-faber-medium.onnx |
+| Model (en-US) | ~/.local/share/piper/en_US-lessac-medium.onnx (~60MB) |
+| Source | HuggingFace (rhasspy/piper-voices) |
 
 ## External Services (Optional)
 
@@ -110,4 +112,5 @@ From CLAUDE.md: whenever adding, removing, or changing a dependency, you MUST al
 | 3 | Ollama install + model pulls (qwen2.5:1.5b, moondream) |
 | 4 | Piper TTS binary (architecture-dependent: x86_64/aarch64) |
 | 5 | Piper voice model (pt_BR-faber-medium from HuggingFace) |
+| 5b | Piper voice model en-US (en_US-lessac-medium from HuggingFace, ~60MB) |
 | 6 | XTTS v2 model files (config, vocab, speakers, model weights) |

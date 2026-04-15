@@ -98,6 +98,7 @@ Orion is a 100% offline, local Brazilian Portuguese voice assistant for Ubuntu (
 orion/
 ├── main.py                     # Entry point: banner, signal handling, starts VoiceAssistant
 ├── run_web.py                  # Web settings panel launcher
+├── config.yaml                 # Runtime config (language, etc.) — written by web UI
 ├── requirements.txt            # Python dependencies
 ├── install.sh                  # Complete system installation (6 stages)
 ├── start.sh                    # Launcher: CUDA setup, venv, ollama check
@@ -110,6 +111,7 @@ orion/
 │   └── voice_ref.wav          # XTTS voice reference sample
 └── orion/                     # Python package
     ├── __init__.py
+    ├── config.py              # YAML config load/save
     ├── voice_assistant.py      # Main orchestrator
     ├── clap_detector.py        # Dual-clap activation
     ├── wake_word_detector.py   # "Orion" keyword detection
@@ -121,6 +123,10 @@ orion/
     ├── vad.py                  # Silero VAD wrapper
     ├── audio_utils.py          # Bandpass filter + noise reduction
     ├── face.py                 # Terminal ASCII face animator
+    ├── locales/               # Locale strings
+    │   ├── __init__.py        # get_strings(lang) loader
+    │   ├── pt_BR.py           # Portuguese locale strings
+    │   └── en.py              # English locale strings
     └── web/                   # Web settings panel
         ├── __init__.py
         ├── app.py              # Flask app, routes, API
@@ -133,6 +139,10 @@ orion/
         └── static/
             └── style.css
 ```
+
+## Config & Locale Data Flow
+
+`config.yaml` (project root) → `main.py` calls `load_config()` → reads `language` field → calls `get_strings(lang)` → locale strings dict passed via constructor injection to all components (VoiceAssistant, CommandInterpreter, TTS, etc.).
 
 ## Startup Flow
 

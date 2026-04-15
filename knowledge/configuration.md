@@ -1,6 +1,18 @@
 # Orion - Configuration Reference
 
-All configuration is currently hard-coded in source files. No external config file.
+## Language
+
+| Setting | Value | Notes |
+|---------|-------|-------|
+| Config file | `config.yaml` (project root) | Created on first `PUT /api/settings` |
+| Default language | `pt_BR` | Used when file is absent or key is missing |
+| Supported values | `pt_BR`, `en` | Others rejected with HTTP 400 |
+| Changed via | Web Settings page (`PUT /api/settings`) | e.g. `{"language": "en"}` |
+| Takes effect | On next restart | Web UI shows dropdown at `/settings` |
+
+All locale-specific strings (greetings, stop words, TTS phrases, command descriptions) live in `orion/locales/` and are injected into components at startup based on this value.
+
+## Audio Parameters
 
 ## Audio Parameters
 

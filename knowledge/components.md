@@ -208,6 +208,27 @@ Runs in daemon thread, clears/redraws 5-line face + scrolling log output below.
 
 ---
 
+## Config & Locale System
+
+### config.py
+
+**Role**: Load and save `config.yaml` at the project root.
+
+- `load_config()` — reads `config.yaml` if it exists; returns dict with defaults (`language: pt_BR`) if missing
+- `save_config(data)` — writes the provided dict to `config.yaml` (merges with existing values)
+
+### locales/
+
+**Role**: Provide locale-specific strings to all components via a single loader.
+
+- `orion/locales/__init__.py` — exports `get_strings(lang)` which returns either `pt_BR.STRINGS` or `en.STRINGS`
+- `orion/locales/pt_BR.py` — Portuguese string constants (greetings, stop words, TTS phrases, command descriptions)
+- `orion/locales/en.py` — English string constants with the same structure
+
+**Usage**: `main.py` calls `get_strings(config['language'])` once at startup and passes the resulting dict into every component constructor. Components never read `config.yaml` directly.
+
+---
+
 ## Web Settings Panel (web/app.py)
 
 **Role**: Browser-based UI for viewing/editing project knowledge and configuration. Runs as a standalone Flask server, independent of the voice assistant.
