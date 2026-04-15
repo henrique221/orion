@@ -17,31 +17,20 @@ WAKE_WORD_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
-LISTENING_PHRASES = [
-    "Às suas ordens, Senhor.",
-    "Online e operacional.",
-    "Diga, Senhor.",
-    "Pode falar.",
-    "Sim, Senhor?",
-    "Pronto para receber instruções.",
-    "No que posso ser útil?",
-    "À disposição.",
-    "Aguardando comando, Senhor.",
-    "Prossiga, Senhor.",
-]
-
 
 class VoiceAssistant:
-    def __init__(self):
+    def __init__(self, strings, language):
         self._lock = threading.Lock()
         self._running = True
+        self._strings = strings
 
-        print("\nInicializando Orion...\n")
+        print(f"\n{strings['terminal']['initializing']}\n")
         self.face = FaceAnimator()
-        self.tts = TTS(face=self.face)
-        self.recognizer = SpeechRecognizer()
-        self.interpreter = CommandInterpreter()
+        self.tts = TTS(strings, face=self.face)
+        self.recognizer = SpeechRecognizer(strings)
+        self.interpreter = CommandInterpreter(strings)
         self.executor = CommandExecutor(
+            strings,
             tts=self.tts,
             pause_listening=self._stop_listeners,
             resume_listening=self._start_listeners,
@@ -50,6 +39,7 @@ class VoiceAssistant:
         self.wake_word = WakeWordDetector(
             on_activate=self._on_activate,
             whisper_model=self.recognizer.model,
+            strings=strings,
         )
 
     def _stop_listeners(self):
@@ -59,13 +49,13 @@ class VoiceAssistant:
     def _start_listeners(self):
         self.detector.start()
         self.wake_word.start()
-        print("\nAguardando palmas ou \"Orion\"...\n")
+        print(f"\n{self._strings['terminal']['waiting_activation']}\n")
 
     def _on_activate(self, wake_text=None):
         if not self._lock.acquire(blocking=False):
             return
         try:
-            print("\n>> Ativado!")
+            print(f"\n{self._strings['terminal']['activated']}")
             sys.stdout.write("\a")
             sys.stdout.flush()
             self._stop_listeners()
@@ -81,7 +71,7 @@ class VoiceAssistant:
             if initial_text:
                 self._conversation_loop(initial_text=initial_text)
             else:
-                self.tts.speak(random.choice(LISTENING_PHRASES))
+                self.tts.speak(random.choice(self._strings["listening_phrases"]))
                 self._conversation_loop()
         finally:
             if not self.executor._demo_running:
@@ -92,7 +82,7 @@ class VoiceAssistant:
             self._lock.release()
 
     def _beep(self):
-        """Toca um bip curto para indicar fim da conversa."""
+        """Play a short beep to indicate end of conversation."""
         try:
             import subprocess
             subprocess.Popen(
@@ -104,50 +94,40 @@ class VoiceAssistant:
             sys.stdout.write("\a")
             sys.stdout.flush()
 
-    STOP_WORDS = ("para", "pare", "parar", "chega", "dispensado")
-
     def _conversation_loop(self, initial_text=None):
-        """Mantém a conversa ativa até o usuário ficar em silêncio."""
+        """Keep the conversation active until the user goes silent."""
         first = True
         while True:
             if first and initial_text:
                 text = initial_text
                 first = False
-                print(f"  Voce disse: {text}")
+                print(f"  {self._strings['terminal']['you_said']} {text}")
             else:
                 first = False
                 self.face.set_state(State.LISTENING)
                 text = self.recognizer.record_and_transcribe()
                 if not text:
-                    print("  Sem resposta, encerrando conversa.")
+                    print(f"  {self._strings['terminal']['no_response']}")
                     return
-                print(f"  Voce disse: {text}")
+                print(f"  {self._strings['terminal']['you_said']} {text}")
 
-            if text.strip().lower().rstrip(".!,") in self.STOP_WORDS:
-                print("  Conversa encerrada pelo usuário.")
-                self.tts.speak(random.choice([
-                    "Entendido, Senhor.",
-                    "À disposição, Senhor.",
-                    "Estarei aqui se precisar.",
-                ]))
+            if text.strip().lower().rstrip(".!,") in self._strings["stop_words"]:
+                print(f"  {self._strings['terminal']['conversation_ended']}")
+                self.tts.speak(random.choice(self._strings["stop_responses"]))
                 return
 
             self.face.set_state(State.PROCESSING)
             commands = self.interpreter.interpret(text)
             if not commands:
-                self.tts.speak(random.choice([
-                    "Houve uma falha no processamento, Senhor.",
-                    "Meus sistemas não conseguiram interpretar. Pode repetir?",
-                    "Interferência nos meus circuitos. Tente novamente.",
-                ]))
+                self.tts.speak(random.choice(self._strings["error_responses"]))
                 return
 
             interrupted = False
             execution_results = []
             for command in commands:
                 print(
-                    f"  Acao: {command.get('action')} -> "
-                    f"{command.get('target', '')}"
+                    f"  {self._strings['terminal']['action_label']} "
+                    f"{command.get('action')} -> {command.get('target', '')}"
                 )
 
                 result = self.executor.execute(command, original_text=text)
@@ -157,35 +137,17 @@ class VoiceAssistant:
                 response = result or command.get("reply", "")
                 execution_results.append(response)
                 if response:
-                    print(f"  Resposta: {response}")
+                    print(f"  {self._strings['terminal']['response_label']} {response}")
                     self.tts.speak(response)
                     if self.tts.interrupted:
-                        print("  Interrompido pelo usuário.")
+                        print(f"  {self._strings['terminal']['interrupted']}")
                         interrupted = True
                         break
             self.interpreter.record_execution_results(execution_results)
             if interrupted:
                 continue
 
-            print("  Aguardando próximo comando...")
-
-    GREETINGS = {
-        "morning": [
-            "Bom dia, Senhor. Sistemas online.",
-            "Bom dia, senhor Borges. Às ordens.",
-            "Bom dia, Senhor. Orion operacional.",
-        ],
-        "afternoon": [
-            "Boa tarde, Senhor. Pronto para servir.",
-            "Boa tarde, senhor Borges. Online.",
-            "Boa tarde, Senhor. Sistemas ativos.",
-        ],
-        "evening": [
-            "Boa noite, Senhor. À disposição.",
-            "Boa noite, senhor Borges. Orion online.",
-            "Boa noite, Senhor. Pronto quando precisar.",
-        ],
-    }
+            print(f"  {self._strings['terminal']['waiting_next']}")
 
     def start(self):
         self.face.setup()
@@ -196,7 +158,7 @@ class VoiceAssistant:
             period = "afternoon"
         else:
             period = "evening"
-        greeting = random.choice(self.GREETINGS[period])
+        greeting = random.choice(self._strings["greetings"][period])
         print(f"\n  {greeting}")
         self.tts.speak(greeting)
         self._start_listeners()
