@@ -22,7 +22,10 @@
                 <div class="settings-key">Language</div>
                 <div class="settings-hint">Voice recognition and response language</div>
             </div>
-            <span class="settings-val">pt-BR</span>
+            <select id="language-select" class="settings-select">
+                <option value="pt_BR" {% if config.language == 'pt_BR' %}selected{% endif %}>Portugues (BR)</option>
+                <option value="en" {% if config.language == 'en' %}selected{% endif %}>English</option>
+            </select>
         </div>
         <div class="settings-row">
             <div>
@@ -143,10 +146,42 @@
         </div>
     </div>
 
-    <div class="info-banner">
-        Settings are currently read-only. Editable configuration is coming soon.
-        To change values now, edit the source files directly or use the
-        <a href="/knowledge">Knowledge</a> section.
+    <div class="settings-actions">
+        <button id="save-settings" class="btn btn-primary">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+            </svg>
+            Save
+        </button>
+        <span id="save-status" class="settings-status"></span>
     </div>
+    <div class="info-banner">
+        Restart Orion to apply language changes.
+    </div>
+
+    <script>
+    document.getElementById('save-settings').addEventListener('click', async () => {
+        const lang = document.getElementById('language-select').value;
+        const status = document.getElementById('save-status');
+        try {
+            const r = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({language: lang}),
+            });
+            if (r.ok) {
+                status.textContent = 'Saved!';
+                status.style.color = 'var(--cyan)';
+            } else {
+                status.textContent = 'Error saving.';
+                status.style.color = 'var(--red, #ef4444)';
+            }
+        } catch (e) {
+            status.textContent = 'Connection error.';
+            status.style.color = 'var(--red, #ef4444)';
+        }
+        setTimeout(() => { status.textContent = ''; }, 3000);
+    });
+    </script>
 </div>
 {% endblock %}

@@ -841,3 +841,38 @@ body::before {
 /* ── Utility ───────────────────────────────────────────────── */
 .hidden { display: none !important; }
 .mt-2 { margin-top: 2rem; }
+
+.settings-select {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--cyan);
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.settings-select:focus {
+    border-color: var(--cyan);
+}
+
+.settings-select option {
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+.settings-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.settings-status {
+    font-size: 0.8rem;
+    font-family: var(--font-mono);
+    transition: opacity 0.3s;
+}

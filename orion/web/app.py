@@ -2,6 +2,7 @@ import os
 import glob
 import socket
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, abort
+from orion.config import load_config, save_config
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 KNOWLEDGE_DIR = os.path.join(BASE_DIR, "knowledge")
@@ -101,10 +102,30 @@ def knowledge_save(filepath):
 
 @app.route("/settings")
 def settings():
-    return render_template("settings.html")
+    config = load_config()
+    return render_template("settings.html", config=config)
 
 
 # ── API endpoints (for future AJAX use) ────────────────────────────
+
+
+@app.route("/api/settings", methods=["GET"])
+def api_settings_get():
+    return jsonify(load_config())
+
+
+@app.route("/api/settings", methods=["PUT"])
+def api_settings_update():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "missing data"}), 400
+    config = load_config()
+    if "language" in data:
+        if data["language"] not in ("pt_BR", "en"):
+            return jsonify({"error": "invalid language"}), 400
+        config["language"] = data["language"]
+    save_config(config)
+    return jsonify({"status": "saved", "config": config})
 
 
 @app.route("/api/knowledge")
