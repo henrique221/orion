@@ -27,9 +27,11 @@ class WakeWordDetector:
     # Silero VAD threshold — lower = more sensitive to quiet speech
     VAD_THRESHOLD = 0.35
 
-    def __init__(self, on_activate, whisper_model):
+    def __init__(self, on_activate, whisper_model, strings):
         self.on_activate = on_activate
         self.model = whisper_model
+        self._strings = strings
+        self._language = strings["tts"]["whisper"]
         self._stream = None
         self._last_activate = 0.0
         self._speech_start = None
@@ -38,9 +40,9 @@ class WakeWordDetector:
         self._pre_buffer = collections.deque(maxlen=self.PRE_BUFFER_BLOCKS)
         self._checking = False
         self._noise_profile = self._calibrate_noise()
-        print("  Carregando Silero VAD (wake word)...")
+        print(strings["terminal"]["loading_vad_wake"])
         self._vad = VoiceActivityDetector(threshold=self.VAD_THRESHOLD)
-        print("  Silero VAD pronto.")
+        print(strings["terminal"]["vad_ready"])
 
     def _calibrate_noise(self):
         """Captura 1s de ruído ambiente para o redutor de ruído."""
@@ -103,7 +105,7 @@ class WakeWordDetector:
             audio = clean_audio(audio, self.SAMPLE_RATE, noise_profile=self._noise_profile, prop_decrease=0.6)
             segments, _ = self.model.transcribe(
                 audio,
-                language="pt",
+                language=self._language,
                 beam_size=3,
                 temperature=0,
                 without_timestamps=True,
@@ -119,7 +121,7 @@ class WakeWordDetector:
                 return
 
             if _WAKE_RE.search(text):
-                print(f"  [Wake word: \"{text}\"]")
+                print(self._strings["terminal"]["wake_word_detected"].format(text=text))
                 self._last_activate = time.time()
                 self.on_activate(text)
         except Exception:

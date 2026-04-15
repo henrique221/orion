@@ -27,11 +27,15 @@ class TTS:
 
     PIPER_BIN = os.path.expanduser("~/.local/bin/piper")
     PIPER_LIB = os.path.expanduser("~/.local/bin")
-    PIPER_MODEL = os.path.expanduser(
-        "~/.local/share/piper/pt_BR-faber-medium.onnx"
-    )
 
-    def __init__(self, face=None):
+    def __init__(self, strings, face=None):
+        self._strings = strings
+        tts_cfg = strings["tts"]
+        self._xtts_lang = tts_cfg["xtts"]
+        self._kokoro_lang = tts_cfg["kokoro_lang"]
+        self._espeak_voice = tts_cfg["espeak"]
+        self._piper_model = tts_cfg["piper_model"]
+
         self._xtts = None
         self._kokoro = None
         self._g2p = None
@@ -51,21 +55,21 @@ class TTS:
                 self._has_cuda = torch.cuda.is_available()
                 from TTS.api import TTS as CoquiTTS
 
-                print("  Carregando XTTS v2...")
+                print(self._strings["terminal"]["loading_xtts"])
                 device = "cuda" if self._has_cuda else "cpu"
                 self._xtts = CoquiTTS(self.XTTS_MODEL).to(device)
                 self._xtts_model = self._xtts.synthesizer.tts_model
                 # Cache do embedding da voz (evita reprocessar a cada fala)
-                print("  Cacheando embedding da voz...")
+                print(self._strings["terminal"]["caching_voice"])
                 self._xtts_gpt_latent, self._xtts_speaker_emb = \
                     self._xtts_model.get_conditioning_latents(audio_path=self.VOICE_REF)
                 if self._has_cuda:
                     vram = torch.cuda.memory_allocated() / 1024 ** 2
-                    print(f"  TTS: XTTS v2 pronto (GPU, {vram:.0f}MB VRAM).")
+                    print(self._strings["terminal"]["xtts_ready_gpu"].format(vram=vram))
                 else:
-                    print("  TTS: XTTS v2 pronto (CPU).")
+                    print(self._strings["terminal"]["xtts_ready_cpu"])
             except Exception as e:
-                print(f"  XTTS v2 indisponível ({e}), tentando Kokoro...")
+                print(self._strings["terminal"]["xtts_unavailable"].format(error=e))
 
         # 2. Fallback: Kokoro (CPU)
         if self._xtts is None and os.path.isfile(self.KOKORO_MODEL) and os.path.isfile(
@@ -75,29 +79,27 @@ class TTS:
                 from kokoro_onnx import Kokoro
                 from misaki.espeak import EspeakG2P
 
-                print("  Carregando Kokoro TTS...")
+                print(self._strings["terminal"]["loading_kokoro"])
                 self._kokoro = Kokoro(self.KOKORO_MODEL, self.KOKORO_VOICES)
-                self._g2p = EspeakG2P(language="pt-br")
-                print("  TTS: Kokoro pronto.")
+                self._g2p = EspeakG2P(language=self._kokoro_lang)
+                print(self._strings["terminal"]["kokoro_ready"])
             except Exception as e:
-                print(f"  Kokoro indisponível ({e}), tentando Piper...")
+                print(self._strings["terminal"]["kokoro_unavailable"].format(error=e))
 
         # 3. Fallback: Piper / espeak-ng
         if self._xtts is None and self._kokoro is None:
-            self._use_piper = os.path.isfile(
-                self.PIPER_BIN
-            ) and os.path.isfile(self.PIPER_MODEL)
+            self._use_piper = os.path.isfile(self.PIPER_BIN) and os.path.isfile(self._piper_model)
             self._piper_env = os.environ.copy()
             ld = self._piper_env.get("LD_LIBRARY_PATH", "")
             self._piper_env["LD_LIBRARY_PATH"] = (
                 f"{self.PIPER_LIB}:{ld}" if ld else self.PIPER_LIB
             )
             if self._use_piper:
-                print("  TTS: Piper pronto (fallback).")
+                print(self._strings["terminal"]["piper_ready"])
             elif shutil.which("espeak-ng"):
-                print("  TTS: espeak-ng (fallback).")
+                print(self._strings["terminal"]["espeak_ready"])
             else:
-                print("  AVISO: Nenhum TTS disponível.")
+                print(self._strings["terminal"]["no_tts"])
 
     def free_vram(self):
         """Move XTTS para CPU temporariamente para liberar VRAM."""
@@ -107,7 +109,7 @@ class TTS:
             self._xtts_gpt_latent = self._xtts_gpt_latent.cpu()
             self._xtts_speaker_emb = self._xtts_speaker_emb.cpu()
             torch.cuda.empty_cache()
-            print("  XTTS movido para CPU.")
+            print(self._strings["terminal"]["xtts_to_cpu"])
 
     def reclaim_vram(self):
         """Move XTTS de volta para GPU."""
@@ -115,7 +117,7 @@ class TTS:
             self._xtts_model.cuda()
             self._xtts_gpt_latent = self._xtts_gpt_latent.cuda()
             self._xtts_speaker_emb = self._xtts_speaker_emb.cuda()
-            print("  XTTS movido para GPU.")
+            print(self._strings["terminal"]["xtts_to_gpu"])
 
     def speak(self, text):
         if not text:
@@ -175,7 +177,7 @@ class TTS:
                 with torch.no_grad():
                     out = self._xtts_model.inference(
                         text=chunk,
-                        language="pt",
+                        language=self._xtts_lang,
                         gpt_cond_latent=self._xtts_gpt_latent,
                         speaker_embedding=self._xtts_speaker_emb,
                         temperature=0.3,
@@ -203,7 +205,7 @@ class TTS:
                 from orion.face import State
                 self._face.set_state(State.IDLE)
         except Exception as e:
-            print(f"  Erro XTTS: {e}, usando fallback.")
+            print(self._strings["terminal"]["xtts_error"].format(error=e))
             if self._kokoro:
                 self._speak_kokoro(text)
             elif self._use_piper:
@@ -240,7 +242,7 @@ class TTS:
                 from orion.face import State
                 self._face.set_state(State.IDLE)
         except Exception as e:
-            print(f"  Erro Kokoro: {e}, usando fallback.")
+            print(self._strings["terminal"]["kokoro_error"].format(error=e))
             if self._use_piper:
                 self._speak_piper(text)
             else:
@@ -267,7 +269,7 @@ class TTS:
                         if consecutive >= self.INTERRUPT_CONSECUTIVE:
                             sd.stop()
                             self.interrupted = True
-                            print("  [Fala interrompida]")
+                            print(self._strings["terminal"]["speech_interrupted"])
                             return
                     else:
                         consecutive = 0
@@ -280,7 +282,7 @@ class TTS:
                 [
                     self.PIPER_BIN,
                     "--model",
-                    self.PIPER_MODEL,
+                    self._piper_model,
                     "--output-raw",
                 ],
                 stdin=subprocess.PIPE,
@@ -308,15 +310,15 @@ class TTS:
             aplay.wait()
             piper.wait()
         except Exception as e:
-            print(f"  Erro Piper: {e}, usando fallback.")
+            print(self._strings["terminal"]["piper_error"].format(error=e))
             self._speak_espeak(text)
 
     def _speak_espeak(self, text):
         try:
             subprocess.run(
-                ["espeak-ng", "-v", "pt+f3", "-s", "150", text],
+                ["espeak-ng", "-v", self._espeak_voice, "-s", "150", text],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
         except FileNotFoundError:
-            print(f"  [TTS indisponível] {text}")
+            print(self._strings["terminal"]["tts_unavailable"])
