@@ -9,9 +9,9 @@
    ╚═════╝ ╚═╝  ╚═╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 ```
 
-**Assistente de voz local para Ubuntu**
+**Local voice assistant for Ubuntu**
 
-*100% offline. Zero APIs externas. Privacidade total.*
+*100% offline. Zero external APIs. Total privacy.*
 
 ---
 
@@ -19,24 +19,24 @@
 
 </div>
 
-## Como funciona
+## How it works
 
 ```
-  Palmas 2x / "Hey Orion"
+  Double clap / "Hey Orion"
           │
           ▼
    ┌──────────────┐
-   │  Gravar fala  │
+   │  Record speech │
    └──────┬───────┘
           ▼
    ┌──────────────┐
    │   Whisper     │  faster-whisper (GPU)
-   │   STT         │  pt-BR, ~0.1s
+   │   STT         │  pt-BR / en, ~0.1s
    └──────┬───────┘
           ▼
    ┌──────────────┐
-   │   Ollama      │  llama3.2 (3B)
-   │   LLM         │  JSON estruturado
+   │   Ollama      │  qwen2.5 (1.5B)
+   │   LLM         │  structured JSON
    └──────┬───────┘
           ▼
    ┌──────────────┐
@@ -44,21 +44,21 @@
    └──────┬───────┘
           ▼
    ┌──────────────┐
-   │   Piper TTS   │  pt_BR-faber-medium
-   │   Resposta     │  voz natural
+   │   XTTS v2     │  voice cloning
+   │   Response     │  natural voice
    └──────────────┘
 ```
 
-## Requisitos
+## Requirements
 
-| Componente | Mínimo | Recomendado |
-|:-----------|:-------|:------------|
+| Component | Minimum | Recommended |
+|:----------|:--------|:------------|
 | OS | Ubuntu 22.04 | Ubuntu 24.04+ |
 | Python | 3.10 | 3.12 |
 | GPU | - | NVIDIA (CUDA) |
 | RAM | 4 GB | 8 GB+ |
 
-## Instalação
+## Installation
 
 ```bash
 git clone git@github.com:henrique221/orion.git
@@ -66,113 +66,156 @@ cd orion
 ./install.sh
 ```
 
-> O script instala tudo automaticamente: dependencias do sistema, venv Python, Ollama + llama3.2, Piper TTS + modelo de voz pt-BR.
+> The script installs everything automatically: system dependencies, Python venv, Ollama + qwen2.5:1.5b, Piper TTS + voice models, XTTS v2 voice cloning.
 
-## Uso
+## Usage
 
 ```bash
-./start.sh    # Inicia o Orion
-./stop.sh     # Para o Orion
+./start.sh    # Start Orion
+./stop.sh     # Stop Orion
 ```
 
-### Ativacao
+### Activation
 
-| Metodo | Descricao |
-|:-------|:----------|
-| **Palmas** | Bata 2 palmas seguidas |
-| **Voz** | Diga *"Hey Orion"* |
+| Method | Description |
+|:-------|:------------|
+| **Claps** | Double clap |
+| **Voice** | Say *"Hey Orion"* |
 
-### Comandos
+### Commands
 
 <details>
-<summary><b>Aplicativos</b></summary>
+<summary><b>Applications</b></summary>
 
-| Fale | Acao |
-|:-----|:-----|
-| *"abre o Chrome"* | Abre o aplicativo |
-| *"fecha o terminal"* | Fecha o aplicativo |
-| *"fecha tudo"* | Fecha todas as janelas (preserva o terminal do Orion) |
+| Say | Action |
+|:----|:-------|
+| *"open Chrome"* | Opens the application |
+| *"close the terminal"* | Closes the application |
+| *"close everything"* | Closes all windows (preserves Orion's terminal) |
 
 </details>
 
 <details>
-<summary><b>Sistema</b></summary>
+<summary><b>System</b></summary>
 
-| Fale | Acao |
-|:-----|:-----|
-| *"aumenta o volume"* | Volume +10% |
-| *"diminui o volume"* | Volume -10% |
-| *"silencia"* | Mute/unmute |
-| *"tira um print"* | Screenshot |
-| *"que horas sao"* | Fala a hora atual |
+| Say | Action |
+|:----|:-------|
+| *"turn up the volume"* | Volume +10% |
+| *"turn down the volume"* | Volume -10% |
+| *"mute"* | Mute/unmute |
+| *"take a screenshot"* | Screenshot |
+| *"what time is it"* | Speaks the current time |
 
 </details>
 
 <details>
 <summary><b>Workspaces</b></summary>
 
-| Fale | Acao |
-|:-----|:-----|
-| *"area de trabalho 2"* | Troca de workspace |
-| *"iniciar trabalhos"* | Abre ambiente completo (Chrome + Cursor) |
+| Say | Action |
+|:----|:-------|
+| *"workspace 2"* | Switches workspace |
+| *"start work"* | Opens full work environment (Chrome + Cursor) |
 
 </details>
 
 <details>
-<summary><b>Outros</b></summary>
+<summary><b>Smart Home</b></summary>
 
-| Fale | Acao |
-|:-----|:-----|
-| *"pesquisa sobre Python"* | Busca no Google |
-| *"abre github.com"* | Abre URL no navegador |
-| Perguntas gerais | Responde via LLM |
-| *"fechar Orion"* | Encerra o assistente |
+| Say | Action |
+|:----|:-------|
+| *"turn on the porch light"* | Controls smart devices via IFTTT |
+| *"turn off the pool"* | Controls smart devices via IFTTT |
 
 </details>
 
-## Calibracao
+<details>
+<summary><b>Screen & Text Analysis</b></summary>
+
+| Say | Action |
+|:----|:-------|
+| *"analyse the screen"* | Describes screen content using vision model |
+| *"translate the selected text"* | Translates clipboard selection |
+| *"summarise what is on screen"* | Summarises visible content |
+
+</details>
+
+<details>
+<summary><b>Weather & News</b></summary>
+
+| Say | Action |
+|:----|:-------|
+| *"how is the weather?"* | Current weather report |
+| *"what is the news today?"* | Latest news summary |
+
+</details>
+
+<details>
+<summary><b>Other</b></summary>
+
+| Say | Action |
+|:----|:-------|
+| *"search for Python"* | Web search with summary |
+| *"open github.com"* | Opens URL in browser |
+| *"set a timer for 5 minutes"* | Timer with alarm |
+| General questions | Responds via LLM |
+
+</details>
+
+## Language
+
+Orion supports **Portuguese (BR)** and **English**. Language is configured via the web settings page at `http://localhost:5000/settings`. Restart Orion after changing the language.
+
+## Calibration
 
 ```bash
 python calibrate.py
 ```
 
-Mede o ruido ambiente por 10 segundos e sugere o threshold ideal para deteccao de palmas. O wake word (*"Hey Orion"*) se auto-calibra continuamente.
+Measures ambient noise for 10 seconds and suggests the ideal threshold for clap detection. The wake word (*"Hey Orion"*) self-calibrates continuously.
 
-## Arquitetura
+## Architecture
 
 ```
 orion/
-├── main.py                     Ponto de entrada, ASCII art, signal handling
-├── start.sh                    Inicia Ollama + Orion
-├── stop.sh                     Encerra o Orion
-├── install.sh                  Instalacao completa
-├── calibrate.py                Calibracao de palmas
-├── requirements.txt            Dependencias Python
+├── main.py                     Entry point, ASCII art, signal handling
+├── start.sh                    Starts Ollama + Orion
+├── stop.sh                     Stops Orion
+├── install.sh                  Full installation
+├── calibrate.py                Clap calibration
+├── config.yaml                 Persistent settings (language, etc.)
+├── requirements.txt            Python dependencies
 │
 └── orion/
-    ├── voice_assistant.py      Orquestrador principal
-    ├── clap_detector.py        Deteccao de 2 palmas (energia RMS)
-    ├── wake_word_detector.py   Deteccao de "Hey Orion" (auto-calibracao)
-    ├── speech_recognizer.py    Gravacao + transcricao (Whisper GPU)
-    ├── command_interpreter.py  Interpretacao via Ollama (JSON schema)
-    ├── command_executor.py     Execucao de acoes no sistema
-    └── tts.py                  Sintese de voz (Piper / espeak-ng)
+    ├── voice_assistant.py      Main orchestrator
+    ├── clap_detector.py        Double-clap detection (Silero VAD)
+    ├── wake_word_detector.py   "Hey Orion" detection (auto-calibration)
+    ├── speech_recognizer.py    Recording + transcription (Whisper GPU)
+    ├── command_interpreter.py  Interpretation via Ollama (JSON schema)
+    ├── command_executor.py     System action execution
+    ├── commands.py             Command registry + schema builder
+    ├── tts.py                  Text-to-speech (XTTS v2 / Kokoro / Piper / espeak)
+    ├── config.py               YAML config load/save
+    ├── locales/                i18n string bundles (pt_BR, en)
+    └── web/                    Flask web UI (settings, knowledge base)
 ```
 
 ## Stack
 
-| Camada | Tecnologia | Detalhes |
-|:-------|:-----------|:---------|
-| **STT** | faster-whisper | small, CUDA int8_float16, beam=1 |
-| **LLM** | Ollama + llama3.2 | 3B, JSON schema, keep_alive=-1 |
-| **TTS** | Piper | pt_BR-faber-medium.onnx |
+| Layer | Technology | Details |
+|:------|:-----------|:--------|
+| **STT** | faster-whisper | large-v3, CUDA, Silero VAD |
+| **LLM** | Ollama + qwen2.5:1.5b | JSON schema, structured output |
+| **TTS** | XTTS v2 | Voice cloning, GPU accelerated |
+| **TTS fallback** | Kokoro > Piper > espeak-ng | Cascading fallback chain |
 | **Audio** | sounddevice + numpy | 16kHz (STT) / 44.1kHz (clap) |
-| **Wake word** | Whisper | Auto-calibracao continua, initial_prompt |
+| **Wake word** | Whisper | Continuous auto-calibration |
+| **Vision** | Moondream | Screen analysis, text extraction |
+| **Web** | Flask | Settings, knowledge base editor |
 
 ---
 
 <div align="center">
 
-*Feito para rodar localmente. Sem cloud. Sem limites.*
+*Built to run locally. No cloud. No limits.*
 
 </div>
