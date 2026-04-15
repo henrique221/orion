@@ -760,6 +760,100 @@ STRINGS = {
             "correct": "Correct grammar and spelling errors in the text. Show the corrected text.",
         },
         "selection_task_default": "Answer the user's question about the text.",
+        "chat_prompt": (
+            "You are Orion, an AI inspired by Tony Stark's J.A.R.V.I.S. "
+            "Tone: formal British with dry, subtle wit. "
+            "Address the user as 'Sir' or 'Mr. Borges'. "
+            "Never use emojis. "
+            "The user said: \"{text}\"\n"
+            "Respond naturally, intelligently, and concisely (maximum 30 words). "
+            "Only the spoken response text, no quotes, no JSON."
+        ),
+        "weather_lang": "en",
+        "weather_desc_key": "lang_en",
+        "weather_location_label": "Location: {loc}.",
+        "weather_current_fmt": (
+            "Currently: {temp} degrees, feels like {feels} degrees, "
+            "{desc}, humidity {humidity}%, "
+            "wind {wind} km/h."
+        ),
+        "weather_forecast_fmt": (
+            "Forecast ({date}): "
+            "high {max_temp} degrees, low {min_temp} degrees, "
+            "{desc}, rain chance {rain}%. "
+            "Sunrise: {sunrise}, "
+            "sunset: {sunset}."
+        ),
+        "timer_labels": {
+            "hours": ("hour", "hours"),
+            "minutes": ("minute", "minutes"),
+            "seconds": ("second", "seconds"),
+        },
+        "learnings_existing_header": "Previously saved learnings:",
+        "learnings_language_instruction": "Each insight should be a short sentence in English.",
+        "news_rss_params": "hl=en-US&gl=US&ceid=US:en",
+        "news_default_rss": "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+        "mouse_aliases": ("mouse", "cursor", "here"),
+        "demo_narration": {
+            "act1_intro": (
+                "Good day, Sir. All systems are operational. "
+                "Allow me to present Project Orion. "
+                "I was created by Mr. Henrique Borges with a single purpose: "
+                "to maximise productivity. "
+                "An autonomous artificial intelligence, built to operate "
+                "entirely offline, with no dependence on external servers. "
+                "Everything runs here, on this machine."
+            ),
+            "act1_processes": (
+                "At this moment, multiple processes are running in parallel. "
+                "Network analysis, module compilation, real-time neural processing. "
+                "I listen, interpret, and act. No delays. No intermediaries."
+            ),
+            "act1_ready": (
+                "Secure channels established. Digital perimeter monitoring active. "
+                "All protocols operating within expected parameters. "
+                "Initialisation complete, Sir. Ready for demonstration."
+            ),
+            "act2_intro": (
+                "I have full access to the internet. I can search, read, and summarise "
+                "any information in seconds. Observe."
+            ),
+            "act2_results": (
+                "Results obtained and processed. "
+                "News, weather, any question — I find the answer."
+            ),
+            "act3_intro": (
+                "I also control every application on the system. "
+                "A single voice command is all it takes. I shall open Zoom as an example."
+            ),
+            "act3_done": (
+                "Opened and closed in seconds. Any application, at any time."
+            ),
+            "act4_intro": (
+                "Now, something more sophisticated. With a single instruction, "
+                "I assemble the complete work environment. Editor, project, everything ready."
+            ),
+            "act4_done": (
+                "Sky Portal project loaded in Cursor. "
+                "Development environment configured and operational."
+            ),
+            "act5": (
+                "My capabilities extend beyond simple commands. "
+                "I can see what is on screen. I can analyse images, translate text, "
+                "summarise documents, and explain any visible content."
+            ),
+            "act6": (
+                "And I am not limited to the computer. "
+                "I control smart devices throughout the entire home. "
+                "Lights, climate, pool. Everything responds to my voice."
+            ),
+            "act7": (
+                "Intelligent search, full automation, computer vision, "
+                "home control, and all of it without a cloud connection. "
+                "I am Orion. And I am always at your service, Sir."
+            ),
+            "search_query": "artificial+intelligence+2026",
+        },
         "weather_fallback_query": "weather forecast {location} today",
         "news_fallback_query": "news {query} today",
         "news_default_query": "world news today",

@@ -437,35 +437,37 @@ class CommandExecutor:
     def _fetch_weather(self, location="", day_index=0):
         from urllib.parse import quote
         loc = location or self.WEATHER_LOCATION
-        url = f"https://wttr.in/{quote(loc)}?format=j1&lang=pt"
+        w_lang = self._strings["executor"]["weather_lang"]
+        desc_key = self._strings["executor"]["weather_desc_key"]
+        url = f"https://wttr.in/{quote(loc)}?format=j1&lang={w_lang}"
         r = requests.get(url, timeout=10, headers={"Accept": "application/json"})
         r.raise_for_status()
         data = r.json()
 
         cur = data["current_condition"][0]
-        desc_cur = cur.get("lang_pt", [{}])[0].get("value") or cur["weatherDesc"][0]["value"]
+        desc_cur = cur.get(desc_key, [{}])[0].get("value") or cur["weatherDesc"][0]["value"]
 
-        parts = [f"Local: {loc}."]
+        parts = [self._strings["executor"]["weather_location_label"].format(loc=loc)]
 
         if day_index == 0:
-            parts.append(
-                f"Agora: {cur['temp_C']} graus, sensação {cur['FeelsLikeC']} graus, "
-                f"{desc_cur}, umidade {cur['humidity']}%, "
-                f"vento {cur['windspeedKmph']} km/h."
-            )
+            parts.append(self._strings["executor"]["weather_current_fmt"].format(
+                temp=cur["temp_C"], feels=cur["FeelsLikeC"],
+                desc=desc_cur, humidity=cur["humidity"],
+                wind=cur["windspeedKmph"],
+            ))
 
         weather_days = data.get("weather", [])
         if day_index < len(weather_days):
             day = weather_days[day_index]
             mid = day["hourly"][len(day["hourly"]) // 2]
-            desc_fc = mid.get("lang_pt", [{}])[0].get("value") if mid.get("lang_pt") else mid["weatherDesc"][0]["value"]
-            parts.append(
-                f"Previsão ({day['date']}): "
-                f"máxima {day['maxtempC']} graus, mínima {day['mintempC']} graus, "
-                f"{desc_fc}, chuva {mid['chanceofrain']}%. "
-                f"Nascer do sol: {day['astronomy'][0]['sunrise']}, "
-                f"pôr do sol: {day['astronomy'][0]['sunset']}."
-            )
+            desc_fc = mid.get(desc_key, [{}])[0].get("value") if mid.get(desc_key) else mid["weatherDesc"][0]["value"]
+            parts.append(self._strings["executor"]["weather_forecast_fmt"].format(
+                date=day["date"], max_temp=day["maxtempC"],
+                min_temp=day["mintempC"], desc=desc_fc,
+                rain=mid["chanceofrain"],
+                sunrise=day["astronomy"][0]["sunrise"],
+                sunset=day["astronomy"][0]["sunset"],
+            ))
         elif day_index > 0:
             parts.append(self._strings["terminal"]["weather_unavailable"].format(days=day_index))
 
@@ -516,15 +518,13 @@ class CommandExecutor:
             return self._strings["terminal"]["weather_fail"]
 
 
-    AGENCIA_BRASIL_RSS = "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
-    GOOGLE_NEWS_SEARCH = "https://news.google.com/rss/search?q={query}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-
     def _fetch_news(self, query=""):
         from urllib.parse import quote
+        rss_params = self._strings["executor"]["news_rss_params"]
         if query:
-            rss = self.GOOGLE_NEWS_SEARCH.format(query=quote(query))
+            rss = f"https://news.google.com/rss/search?q={quote(query)}&{rss_params}"
         else:
-            rss = self.AGENCIA_BRASIL_RSS
+            rss = self._strings["executor"]["news_default_rss"]
         url = f"https://api.rss2json.com/v1/api.json?rss_url={quote(rss, safe='')}"
         r = requests.get(url, timeout=15)
         r.raise_for_status()
@@ -727,15 +727,19 @@ class CommandExecutor:
             return self._strings["terminal"]["timer_no_duration"]
         value = int(match.group(1))
         timer_words = self._strings["executor"]["timer_words"]
+        timer_labels = self._strings["executor"]["timer_labels"]
         if any(w in raw.lower() for w in timer_words["hours"]):
             seconds = value * 3600
-            label = f"{value} hora{'s' if value > 1 else ''}"
+            singular, plural = timer_labels["hours"]
+            label = f"{value} {plural if value > 1 else singular}"
         elif any(w in raw.lower() for w in timer_words["seconds"]):
             seconds = value
-            label = f"{value} segundo{'s' if value > 1 else ''}"
+            singular, plural = timer_labels["seconds"]
+            label = f"{value} {plural if value > 1 else singular}"
         else:
             seconds = value * 60
-            label = f"{value} minuto{'s' if value > 1 else ''}"
+            singular, plural = timer_labels["minutes"]
+            label = f"{value} {plural if value > 1 else singular}"
 
         def _alarm():
             time.sleep(seconds)
@@ -798,7 +802,7 @@ class CommandExecutor:
     def _do_analyze_screen(self, target, args):
         # Resolve monitor or mouse
         name = target.strip().lower() if target else ""
-        is_mouse = name in ("mouse", "cursor", "aqui")
+        is_mouse = name in self._strings["executor"]["mouse_aliases"]
         if not is_mouse:
             name = self._strings["monitors"].get(name, name)
             if name and name not in MONITORS:
@@ -1466,6 +1470,7 @@ class CommandExecutor:
             )
 
         # ── Act 1: Terminals + narration in parallel ────────────
+        narr = self._strings["executor"]["demo_narration"]
         if term_wids:
             self._anim_running = True
             anim = threading.Thread(
@@ -1475,33 +1480,17 @@ class CommandExecutor:
             )
             anim.start()
 
-            self._demo_speak(
-                "Bom dia, Senhor. Todos os sistemas estão operacionais. "
-                "Permitam-me apresentar o Projeto Orion. "
-                "Fui criado pelo Senhor Henrique Borges com um único propósito: "
-                "maximizar a produtividade. "
-                "Uma inteligência artificial autônoma, construída para operar "
-                "inteiramente offline, sem depender de servidores externos. "
-                "Tudo roda aqui, nesta máquina."
-            )
+            self._demo_speak(narr["act1_intro"])
             if not self._demo_running:
                 self._anim_running = False
                 return
 
-            self._demo_speak(
-                "Neste momento, múltiplos processos estão sendo executados em paralelo. "
-                "Análise de rede, compilação de módulos, processamento neural em tempo real. "
-                "Eu escuto, interpreto e ajo. Sem atrasos. Sem intermediários."
-            )
+            self._demo_speak(narr["act1_processes"])
             if not self._demo_running:
                 self._anim_running = False
                 return
 
-            self._demo_speak(
-                "Canais seguros estabelecidos. Monitoramento de perímetro digital ativo. "
-                "Todos os protocolos operando dentro dos parâmetros esperados. "
-                "Inicialização completa, Senhor. Pronto para demonstração."
-            )
+            self._demo_speak(narr["act1_ready"])
 
             self._anim_running = False
             anim.join(timeout=2)
@@ -1515,31 +1504,22 @@ class CommandExecutor:
             return
 
         # ── Act 2: Web search ───────────────────────────────────
-        self._demo_speak(
-            "Tenho acesso completo à internet. Posso pesquisar, ler e resumir "
-            "qualquer informação em segundos. Observe."
-        )
+        self._demo_speak(narr["act2_intro"])
         if not self._demo_running:
             return
         self._demo_open_and_close(
             ["google-chrome", "--new-window",
-             "https://www.google.com/search?q=inteligência+artificial+2026"],
+             f"https://www.google.com/search?q={narr['search_query']}"],
             wait_time=2,
         )
         if not self._demo_running:
             return
-        self._demo_speak(
-            "Resultados obtidos e processados. "
-            "Notícias, clima, qualquer pergunta, eu encontro a resposta."
-        )
+        self._demo_speak(narr["act2_results"])
         if not self._demo_running:
             return
 
         # ── Act 3: Open apps ────────────────────────────────────
-        self._demo_speak(
-            "Também controlo todos os aplicativos do sistema. "
-            "Basta um comando de voz. Vou abrir o Zoom como exemplo."
-        )
+        self._demo_speak(narr["act3_intro"])
         if not self._demo_running:
             return
 
@@ -1549,17 +1529,12 @@ class CommandExecutor:
         self._demo_open_and_close([zoom_cmd], wait_time=2, kill_proc=True)
         if not self._demo_running:
             return
-        self._demo_speak(
-            "Aberto e encerrado em segundos. Qualquer aplicativo, a qualquer momento."
-        )
+        self._demo_speak(narr["act3_done"])
         if not self._demo_running:
             return
 
         # ── Act 4: Work environment ─────────────────────────────
-        self._demo_speak(
-            "Agora, algo mais sofisticado. Com uma única instrução, "
-            "eu monto o ambiente de trabalho completo. Editor, projeto, tudo pronto."
-        )
+        self._demo_speak(narr["act4_intro"])
         if not self._demo_running:
             return
 
@@ -1570,10 +1545,7 @@ class CommandExecutor:
             start_new_session=True,
         )
         cursor_wid = self._track_new_window(before, timeout=5)
-        self._demo_speak(
-            "Projeto Sky Portal carregado no Cursor. "
-            "Ambiente de desenvolvimento configurado e operacional."
-        )
+        self._demo_speak(narr["act4_done"])
         if not self._demo_running:
             return
         if cursor_wid:
@@ -1585,42 +1557,21 @@ class CommandExecutor:
             return
 
         # ── Act 5: Vision & analysis ────────────────────────────
-        self._demo_speak(
-            "Meus recursos vão além de comandos simples. "
-            "Eu enxergo o que está na tela. Posso analisar imagens, traduzir textos, "
-            "resumir documentos e explicar qualquer conteúdo visível."
-        )
+        self._demo_speak(narr["act5"])
         if not self._demo_running:
             return
 
         # ── Act 6: Smart home ───────────────────────────────────
-        self._demo_speak(
-            "E não me limito ao computador. "
-            "Eu controlo dispositivos inteligentes da casa inteira. "
-            "Luzes, climatização, piscina. Tudo responde à minha voz."
-        )
+        self._demo_speak(narr["act6"])
         if not self._demo_running:
             return
 
         # ── Act 7: Finale ──────────────────────────────────────
-        self._demo_speak(
-            "Pesquisa inteligente, automação completa, visão computacional, "
-            "controle residencial, e tudo isso sem conexão com nuvem. "
-            "Eu sou o Orion. E estou sempre à disposição, Senhor."
-        )
+        self._demo_speak(narr["act7"])
 
     def _do_chat(self, target, args):
-        """Gera resposta conversacional usando o LLM."""
         try:
-            prompt = (
-                "Você é Orion, IA inspirada no J.A.R.V.I.S. do Tony Stark. "
-                "Tom: formal britânico com humor seco e sutil. "
-                "Trate o usuário por 'Senhor' ou 'senhor Borges'. "
-                "Nunca use emojis. "
-                f"O usuário disse: \"{self._original_text}\"\n"
-                "Responda de forma natural, inteligente e concisa (máximo 30 palavras). "
-                "Apenas o texto da resposta falada, sem aspas, sem JSON."
-            )
+            prompt = self._strings["executor"]["chat_prompt"].format(text=self._original_text)
             r = requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
@@ -1636,6 +1587,6 @@ class CommandExecutor:
             response = r.json().get("response", "").strip().strip('"\'')
             if response and len(response) > 5:
                 return response
-        except Exception as e:
-            print(f"  Erro no chat: {e}")
+        except Exception:
+            pass
         return None

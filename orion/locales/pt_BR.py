@@ -766,6 +766,100 @@ STRINGS = {
             "corrigir": "Corrija erros de gramática e ortografia no texto. Mostre o texto corrigido.",
         },
         "selection_task_default": "Responda à pergunta do usuário sobre o texto.",
+        "chat_prompt": (
+            "Você é Orion, IA inspirada no J.A.R.V.I.S. do Tony Stark. "
+            "Tom: formal britânico com humor seco e sutil. "
+            "Trate o usuário por 'Senhor' ou 'senhor Borges'. "
+            "Nunca use emojis. "
+            "O usuário disse: \"{text}\"\n"
+            "Responda de forma natural, inteligente e concisa (máximo 30 palavras). "
+            "Apenas o texto da resposta falada, sem aspas, sem JSON."
+        ),
+        "weather_lang": "pt",
+        "weather_desc_key": "lang_pt",
+        "weather_location_label": "Local: {loc}.",
+        "weather_current_fmt": (
+            "Agora: {temp} graus, sensação {feels} graus, "
+            "{desc}, umidade {humidity}%, "
+            "vento {wind} km/h."
+        ),
+        "weather_forecast_fmt": (
+            "Previsão ({date}): "
+            "máxima {max_temp} graus, mínima {min_temp} graus, "
+            "{desc}, chuva {rain}%. "
+            "Nascer do sol: {sunrise}, "
+            "pôr do sol: {sunset}."
+        ),
+        "timer_labels": {
+            "hours": ("hora", "horas"),
+            "minutes": ("minuto", "minutos"),
+            "seconds": ("segundo", "segundos"),
+        },
+        "learnings_existing_header": "Aprendizados já salvos:",
+        "learnings_language_instruction": "Each insight should be a short sentence in Portuguese.",
+        "news_rss_params": "hl=pt-BR&gl=BR&ceid=BR:pt-419",
+        "news_default_rss": "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml",
+        "mouse_aliases": ("mouse", "cursor", "aqui"),
+        "demo_narration": {
+            "act1_intro": (
+                "Bom dia, Senhor. Todos os sistemas estão operacionais. "
+                "Permitam-me apresentar o Projeto Orion. "
+                "Fui criado pelo Senhor Henrique Borges com um único propósito: "
+                "maximizar a produtividade. "
+                "Uma inteligência artificial autônoma, construída para operar "
+                "inteiramente offline, sem depender de servidores externos. "
+                "Tudo roda aqui, nesta máquina."
+            ),
+            "act1_processes": (
+                "Neste momento, múltiplos processos estão sendo executados em paralelo. "
+                "Análise de rede, compilação de módulos, processamento neural em tempo real. "
+                "Eu escuto, interpreto e ajo. Sem atrasos. Sem intermediários."
+            ),
+            "act1_ready": (
+                "Canais seguros estabelecidos. Monitoramento de perímetro digital ativo. "
+                "Todos os protocolos operando dentro dos parâmetros esperados. "
+                "Inicialização completa, Senhor. Pronto para demonstração."
+            ),
+            "act2_intro": (
+                "Tenho acesso completo à internet. Posso pesquisar, ler e resumir "
+                "qualquer informação em segundos. Observe."
+            ),
+            "act2_results": (
+                "Resultados obtidos e processados. "
+                "Notícias, clima, qualquer pergunta, eu encontro a resposta."
+            ),
+            "act3_intro": (
+                "Também controlo todos os aplicativos do sistema. "
+                "Basta um comando de voz. Vou abrir o Zoom como exemplo."
+            ),
+            "act3_done": (
+                "Aberto e encerrado em segundos. Qualquer aplicativo, a qualquer momento."
+            ),
+            "act4_intro": (
+                "Agora, algo mais sofisticado. Com uma única instrução, "
+                "eu monto o ambiente de trabalho completo. Editor, projeto, tudo pronto."
+            ),
+            "act4_done": (
+                "Projeto Sky Portal carregado no Cursor. "
+                "Ambiente de desenvolvimento configurado e operacional."
+            ),
+            "act5": (
+                "Meus recursos vão além de comandos simples. "
+                "Eu enxergo o que está na tela. Posso analisar imagens, traduzir textos, "
+                "resumir documentos e explicar qualquer conteúdo visível."
+            ),
+            "act6": (
+                "E não me limito ao computador. "
+                "Eu controlo dispositivos inteligentes da casa inteira. "
+                "Luzes, climatização, piscina. Tudo responde à minha voz."
+            ),
+            "act7": (
+                "Pesquisa inteligente, automação completa, visão computacional, "
+                "controle residencial, e tudo isso sem conexão com nuvem. "
+                "Eu sou o Orion. E estou sempre à disposição, Senhor."
+            ),
+            "search_query": "inteligência+artificial+2026",
+        },
         "weather_fallback_query": "previsão do tempo {location} hoje",
         "news_fallback_query": "notícias {query} hoje Brasil",
         "news_default_query": "notícias Brasil hoje",

@@ -261,8 +261,10 @@ class CommandInterpreter:
 
             existing = ""
             if self._learnings:
-                existing = "Aprendizados já salvos:\n" + "\n".join(f"- {l}" for l in self._learnings) + "\n\n"
+                header = self._strings["executor"]["learnings_existing_header"]
+                existing = f"{header}\n" + "\n".join(f"- {l}" for l in self._learnings) + "\n\n"
 
+            lang_instruction = self._strings["executor"]["learnings_language_instruction"]
             prompt = (
                 "You are analyzing a voice assistant's conversation history to extract useful learnings.\n\n"
                 f"{existing}"
@@ -277,7 +279,7 @@ class CommandInterpreter:
                 "- Generic/obvious facts\n"
                 "- Specific timestamps or one-time requests\n\n"
                 "Return ONLY a JSON object: {\"learnings\": [\"insight 1\", \"insight 2\"]}. "
-                "Each insight should be a short sentence in Portuguese. "
+                f"{lang_instruction} "
                 "Return {\"learnings\": []} if nothing new is worth saving."
             )
 
