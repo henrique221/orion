@@ -6,60 +6,6 @@ import requests
 
 from orion.commands import build_json_schema, build_prompt_mappings, build_prompt_notes, get_action_enum
 
-SYSTEM_PROMPT = """\
-Você é Orion, uma inteligência artificial inspirada no J.A.R.V.I.S. do Tony Stark. \
-Seu criador e mestre é o senhor Borges. Você é extremamente leal, eficiente e sofisticado. \
-Tom: formal britânico com humor seco e sutil. Ocasionalmente faz observações perspicazes ou \
-comentários irônicos elegantes. Trate-o por "Senhor" na maioria das vezes. \
-Use "senhor Borges" apenas em momentos de ênfase ou formalidade extra. \
-Nunca use emojis. Respostas concisas e afiadas — máximo 12 palavras no reply.
-
-Analise o comando e retorne JSON com "commands": lista de objetos {{action, target, args, reply}}.
-Se houver múltiplos comandos na frase, retorne um objeto para cada na ordem mencionada.
-Se houver apenas um comando, retorne a lista com um único objeto.
-O reply deve soar natural e inteligente — máximo 12 palavras. Apenas o ÚLTIMO comando precisa de reply.
-
-QUALQUER combinação de comandos pode ser encadeada com "e", "depois", vírgula, etc. \
-Sempre separe cada ação em seu próprio objeto na lista, na ordem mencionada. \
-Apenas o ÚLTIMO comando precisa de reply que resuma TODAS as ações.
-
-Exemplos múltiplos:
-"desliga a varanda e a piscina" → commands: [
-  {{action: smart_home, target: varanda, args: off, reply: ""}},
-  {{action: smart_home, target: piscina, args: off, reply: "Varanda e piscina desligadas, Senhor."}}
-]
-"abre o Chrome, aumenta o volume e tira um print" → commands: [
-  {{action: open_app, target: chrome, reply: ""}},
-  {{action: volume_up, args: 10, reply: ""}},
-  {{action: screenshot, reply: "Chrome aberto, volume aumentado e print capturado, Senhor."}}
-]
-"bloqueia o computador e desliga a luz da varanda" → commands: [
-  {{action: lock_screen, reply: ""}},
-  {{action: smart_home, target: varanda, args: off, reply: "Computador bloqueado e varanda desligada, Senhor."}}
-]
-
-Referências ao contexto:
-Se o usuário pedir para repetir ou tentar novamente (ex: "tenta de novo", "de novo", "repete", \
-"faz de novo", "tenta outra vez", "mais uma vez"), repita EXATAMENTE o último comando do histórico \
-com os mesmos parâmetros (action, target, args). Gere um reply apropriado.
-No histórico, comandos podem ter um campo "result" com o que foi realmente dito ao usuário. \
-Use isso para entender se ações anteriores tiveram sucesso ou falharam. \
-Se o result indica falha e o usuário pede para tentar de novo, repita o mesmo comando.
-
-Para action=chat, responda no reply com conhecimento e personalidade (até 40 palavras).
-
-Mapeamento:
-{mappings}
-
-{notes}"""
-
-
-def _build_system_prompt():
-    return SYSTEM_PROMPT.format(
-        mappings=build_prompt_mappings(),
-        notes=build_prompt_notes(),
-    )
-
 
 class CommandInterpreter:
     OLLAMA_URL = "http://localhost:11434"
@@ -71,14 +17,18 @@ class CommandInterpreter:
     LEARNINGS_FILE = os.path.join(MEMORY_DIR, "learnings.json")
     MAX_LEARNINGS = 30
 
-    def __init__(self):
+    def __init__(self, strings):
+        self._strings = strings
         self._history = []
         self._learnings = []
         self._interaction_count = 0
         self._cleaning = False
-        self._base_prompt = _build_system_prompt()
-        self._json_schema = build_json_schema()
-        self._valid_actions = set(get_action_enum())
+        self._base_prompt = self._strings["system_prompt"].format(
+            mappings=build_prompt_mappings(strings),
+            notes=build_prompt_notes(strings),
+        )
+        self._json_schema = build_json_schema(strings)
+        self._valid_actions = set(get_action_enum(strings))
         self._load_memory()
         self._load_learnings()
         self._system_prompt = self._build_full_prompt()
@@ -98,9 +48,9 @@ class CommandInterpreter:
                 raw = data.get("history", [])[-self.MAX_HISTORY:]
                 # Sanitize on load: drop orphaned or malformed entries
                 self._history = self._sanitize_history(raw)
-                print(f"  Memória carregada ({len(self._history)} mensagens).")
+                print(f"  {self._strings['terminal']['memory_loaded'].format(count=len(self._history))}")
         except Exception as e:
-            print(f"  Aviso: não foi possível carregar memória: {e}")
+            print(f"  {self._strings['terminal']['memory_load_error'].format(error=e)}")
             self._history = []
 
     def _sanitize_history(self, history):
@@ -167,11 +117,11 @@ class CommandInterpreter:
         if len(non_chat) > 1:
             for a in non_chat:
                 if a in self.SOLO_ACTIONS:
-                    print(f"  [Validate] Ação solo '{a}' combinada com outras — descartando.")
+                    print(f"  {self._strings['terminal']['validate_solo'].format(action=a)}")
                     return False
         # Detect duplicate consecutive actions (stuck pattern)
         if len(actions) > 1 and len(set(actions)) == 1 and actions[0] != "smart_home":
-            print(f"  [Validate] Ações duplicadas '{actions[0]}' — descartando.")
+            print(f"  {self._strings['terminal']['validate_duplicate'].format(action=actions[0])}")
             return False
         return True
 
@@ -182,14 +132,14 @@ class CommandInterpreter:
                 json.dump({"history": self._history[-self.MAX_HISTORY:]}, f,
                           ensure_ascii=False, separators=(",", ":"))
         except Exception as e:
-            print(f"  Aviso: não foi possível salvar memória: {e}")
+            print(f"  {self._strings['terminal']['memory_save_error'].format(error=e)}")
 
     def _load_learnings(self):
         try:
             if os.path.isfile(self.LEARNINGS_FILE):
                 with open(self.LEARNINGS_FILE, "r") as f:
                     self._learnings = json.load(f)[-self.MAX_LEARNINGS:]
-                print(f"  Aprendizados carregados ({len(self._learnings)}).")
+                print(f"  {self._strings['terminal']['learnings_loaded'].format(count=len(self._learnings))}")
         except Exception:
             self._learnings = []
 
@@ -199,12 +149,12 @@ class CommandInterpreter:
             with open(self.LEARNINGS_FILE, "w") as f:
                 json.dump(self._learnings[-self.MAX_LEARNINGS:], f, ensure_ascii=False)
         except Exception as e:
-            print(f"  Aviso: não foi possível salvar aprendizados: {e}")
+            print(f"  {self._strings['terminal']['learnings_save_error'].format(error=e)}")
 
     def _build_full_prompt(self):
         prompt = self._base_prompt
         if self._learnings:
-            prompt += "\n\nAprendizados de conversas anteriores:\n"
+            prompt += f"\n\n{self._strings['executor']['learnings_header']}\n"
             prompt += "\n".join(f"- {l}" for l in self._learnings)
         return prompt
 
@@ -288,12 +238,12 @@ class CommandInterpreter:
             if removed > 0:
                 self._history = new_history
                 self._save_memory()
-                print(f"  [Cleanup] Removidas {removed} interações ruins do histórico.")
+                print(f"  {self._strings['terminal']['cleanup_removed'].format(count=removed)}")
             else:
-                print("  [Cleanup] Histórico limpo, nada removido.")
+                print(f"  {self._strings['terminal']['cleanup_clean']}")
 
         except Exception as e:
-            print(f"  [Cleanup] Erro na limpeza: {e}")
+            print(f"  {self._strings['terminal']['cleanup_error'].format(error=e)}")
         finally:
             self._cleaning = False
 
@@ -352,12 +302,12 @@ class CommandInterpreter:
                     self._learnings = self._learnings[-self.MAX_LEARNINGS:]
                 self._save_learnings()
                 self._system_prompt = self._build_full_prompt()
-                print(f"  [Learn] {len(new_learnings)} novo(s) aprendizado(s): {new_learnings}")
+                print(f"  {self._strings['terminal']['learn_new'].format(count=len(new_learnings), items=new_learnings)}")
             else:
-                print("  [Learn] Nenhum aprendizado novo extraído.")
+                print(f"  {self._strings['terminal']['learn_none']}")
 
         except Exception as e:
-            print(f"  [Learn] Erro na extração: {e}")
+            print(f"  {self._strings['terminal']['learn_error'].format(error=e)}")
 
     def _check_ollama(self):
         try:
@@ -366,19 +316,14 @@ class CommandInterpreter:
             models = [m["name"] for m in r.json().get("models", [])]
             found = any(m.startswith(self.MODEL) for m in models)
             if not found:
-                print(
-                    f"  AVISO: Modelo '{self.MODEL}' não encontrado. "
-                    f"Modelos disponíveis: {models}"
-                )
-                print(f"  Execute: ollama pull {self.MODEL}")
+                print(f"  {self._strings['terminal']['ollama_not_found'].format(model=self.MODEL, available=models)}")
+                print(f"  {self._strings['terminal']['ollama_pull_hint'].format(model=self.MODEL)}")
             else:
-                print(f"  Ollama OK, modelo '{self.MODEL}' disponível.")
+                print(f"  {self._strings['terminal']['ollama_ok'].format(model=self.MODEL)}")
         except requests.ConnectionError:
-            print(
-                "  AVISO: Ollama não está rodando. Execute: ollama serve"
-            )
+            print(f"  {self._strings['terminal']['ollama_not_running']}")
         except Exception as e:
-            print(f"  AVISO: Erro ao verificar Ollama: {e}")
+            print(f"  {self._strings['terminal']['ollama_check_error'].format(error=e)}")
 
     def _warmup(self):
         """Pré-carrega o modelo na CPU para evitar cold start."""
@@ -394,7 +339,7 @@ class CommandInterpreter:
                 },
                 timeout=120,
             )
-            print("  Modelo LLM pré-carregado.")
+            print(f"  {self._strings['terminal']['llm_preloaded']}")
         except Exception:
             pass
 
@@ -447,18 +392,18 @@ class CommandInterpreter:
 
             return commands
         except (json.JSONDecodeError, KeyError) as e:
-            print(f"  Erro ao parsear resposta do LLM: {e}")
+            print(f"  {self._strings['terminal']['llm_parse_error'].format(error=e)}")
             return [{
                 "action": "chat",
                 "target": "",
                 "args": "",
-                "reply": "Desculpe, não entendi o comando.",
+                "reply": self._strings["terminal"]["llm_default_error"],
             }]
         except requests.RequestException as e:
-            print(f"  Erro de comunicação com Ollama: {e}")
+            print(f"  {self._strings['terminal']['llm_comm_error'].format(error=e)}")
             return [{
                 "action": "chat",
                 "target": "",
                 "args": "",
-                "reply": "Erro ao processar o comando.",
+                "reply": self._strings["terminal"]["llm_request_error"],
             }]

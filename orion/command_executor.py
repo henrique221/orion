@@ -15,18 +15,16 @@ import tty
 import requests
 
 from orion.commands import (
-    APP_MAP,
     IFTTT_URL,
-    MONITOR_ALIASES,
     MONITORS,
     SAFE_COMMAND_PREFIXES,
     SMART_HOME_DEVICES,
     VISION_MODEL,
-    pick,
 )
 
 class CommandExecutor:
-    def __init__(self, tts=None, pause_listening=None, resume_listening=None):
+    def __init__(self, strings, tts=None, pause_listening=None, resume_listening=None):
+        self._strings = strings
         self._tts = tts
         self._pause_listening = pause_listening
         self._resume_listening = resume_listening
@@ -34,20 +32,21 @@ class CommandExecutor:
         self._demo_running = False
         self._byobu_wid = None
 
+    def _pick(self, action, variant="success", **kwargs):
+        from orion.commands import pick
+        return pick(self._strings, action, variant, **kwargs)
+
     def execute(self, command, original_text=""):
         if not command:
-            return "Nenhum comando recebido."
+            return self._strings["terminal"]["no_command"]
 
         # Handle pending shutdown confirmation
         if self._pending_shutdown:
             self._pending_shutdown = False
             text = original_text.lower().strip()
-            if any(w in text for w in (
-                "sim", "confirmo", "pode", "positivo",
-                "afirmativo", "claro", "manda", "yes",
-            )):
+            if any(w in text for w in self._strings["executor"]["shutdown_confirm_words"]):
                 return self._execute_shutdown()
-            return pick("shutdown", "cancelled")
+            return self._pick("shutdown", "cancelled")
 
         action = command.get("action", "chat")
         target = command.get("target", "")
@@ -62,7 +61,7 @@ class CommandExecutor:
         return reply
 
     def _do_open_app(self, target, args):
-        app = APP_MAP.get(target.lower(), target)
+        app = self._strings["app_map"].get(target.lower(), target)
         try:
             subprocess.Popen(
                 [app],
@@ -70,21 +69,21 @@ class CommandExecutor:
                 stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )
-            return pick("open_app", "success", target=target.capitalize())
+            return self._pick("open_app", "success", target=target.capitalize())
         except FileNotFoundError:
-            return f"Aplicativo {target} não localizado nos meus registros, Senhor."
+            return self._strings["terminal"]["app_not_found"].format(target=target)
 
     def _do_close_app(self, target, args):
-        app = APP_MAP.get(target.lower(), target)
+        app = self._strings["app_map"].get(target.lower(), target)
         try:
             subprocess.run(["wmctrl", "-c", target], capture_output=True)
-            return pick("close_app", "success", target=target.capitalize())
+            return self._pick("close_app", "success", target=target.capitalize())
         except FileNotFoundError:
             try:
                 subprocess.run(["pkill", "-f", app], capture_output=True)
-                return pick("close_app", "success", target=target.capitalize())
+                return self._pick("close_app", "success", target=target.capitalize())
             except Exception:
-                return f"{target} não está respondendo ao encerramento, Senhor."
+                return self._strings["terminal"]["close_app_error"].format(target=target)
 
     def _do_open_url(self, target, args):
         url = target if target.startswith("http") else f"https://{target}"
@@ -94,10 +93,10 @@ class CommandExecutor:
             stderr=subprocess.DEVNULL,
             start_new_session=True,
         )
-        return pick("open_url", "success", target=target)
+        return self._pick("open_url", "success", target=target)
 
     def _do_search_web(self, target, args):
-        t = self._speak_async(pick("search_web", "loading", target=target))
+        t = self._speak_async(self._pick("search_web", "loading", target=target))
 
         # Open browser
         query = target.replace(" ", "+")
@@ -115,7 +114,7 @@ class CommandExecutor:
             t.join()
 
         if not snippets:
-            return f"Navegador aberto com a pesquisa, Senhor. Não consegui extrair resultados para resumir."
+            return self._strings["terminal"]["search_browser_fallback"]
 
         # Summarize with LLM
         question = self._original_text
@@ -125,12 +124,8 @@ class CommandExecutor:
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
                     "model": self.LLM_MODEL,
-                    "prompt": (
-                        f"Resultados de pesquisa para \"{target}\":\n{snippets}\n\n"
-                        f"Pergunta do usuário: \"{question}\"\n\n"
-                        "Resuma os resultados de forma concisa em português do Brasil, "
-                        "no tom do J.A.R.V.I.S. Destaque as informações mais relevantes. "
-                        "Trate-o por Senhor. Máximo 5 frases."
+                    "prompt": self._strings["executor"]["search_summary_prompt"].format(
+                        query=target, snippets=snippets, question=question
                     ),
                     "stream": False,
                     "keep_alive": 0,
@@ -142,8 +137,8 @@ class CommandExecutor:
             text = re.sub(r"[*#_~`>|]", "", text)
             return text
         except Exception as e:
-            print(f"  Erro ao resumir pesquisa: {e}")
-            return f"Pesquisa aberta no navegador, Senhor."
+            print(f"  {self._strings['terminal']['search_error'].format(error=e)}")
+            return self._strings["terminal"]["search_fallback"]
 
     DUCKDUCKGO_URL = "https://lite.duckduckgo.com/lite/"
 
@@ -184,7 +179,7 @@ class CommandExecutor:
 
             return "\n".join(results)
         except Exception as e:
-            print(f"  Erro ao buscar resultados: {e}")
+            print(f"  {self._strings['terminal']['search_results_error'].format(error=e)}")
             return ""
 
     def _do_volume_up(self, target, args):
@@ -193,7 +188,7 @@ class CommandExecutor:
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"+{pct}%"],
             capture_output=True,
         )
-        return pick("volume_up")
+        return self._pick("volume_up")
 
     def _do_volume_down(self, target, args):
         pct = args if args else "10"
@@ -201,14 +196,14 @@ class CommandExecutor:
             ["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"-{pct}%"],
             capture_output=True,
         )
-        return pick("volume_down")
+        return self._pick("volume_down")
 
     def _do_mute(self, target, args):
         subprocess.run(
             ["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"],
             capture_output=True,
         )
-        return pick("mute")
+        return self._pick("mute")
 
     def _do_screenshot(self, target, args):
         ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -217,18 +212,18 @@ class CommandExecutor:
             ["gnome-screenshot", "-f", path], capture_output=True
         )
         if result.returncode == 0:
-            return pick("screenshot")
+            return self._pick("screenshot")
         result = subprocess.run(["scrot", path], capture_output=True)
         if result.returncode == 0:
-            return pick("screenshot")
-        return "Falha na captura de tela, Senhor. Sistemas de imagem indisponíveis."
+            return self._pick("screenshot")
+        return self._strings["terminal"]["screenshot_fail"]
 
     def _do_show_time(self, target, args):
         now = datetime.datetime.now()
         h, m = now.hour, now.minute
         if m == 0:
-            return f"Exatamente {h} horas, Senhor."
-        return f"Marcando {h} e {m}, Senhor."
+            return self._strings["terminal"]["time_exact"].format(h=h)
+        return self._strings["terminal"]["time_normal"].format(h=h, m=m)
 
     def _do_list_windows(self, target, args):
         try:
@@ -243,15 +238,15 @@ class CommandExecutor:
             ]
             if windows:
                 listing = ", ".join(windows[:10])
-                return f"Janelas abertas: {listing}."
-            return "Nenhuma janela encontrada."
+                return self._strings["terminal"]["windows_listing"].format(listing=listing)
+            return self._strings["terminal"]["no_windows"]
         except FileNotFoundError:
-            return "wmctrl não instalado."
+            return self._strings["terminal"]["wmctrl_missing"]
 
     def _do_run_command(self, target, args):
         cmd = target.strip()
         if not any(cmd.startswith(prefix) for prefix in SAFE_COMMAND_PREFIXES):
-            return f"Comando '{cmd}' não permitido por segurança."
+            return self._strings["terminal"]["command_blocked"].format(cmd=cmd)
         try:
             result = subprocess.run(
                 cmd,
@@ -261,9 +256,9 @@ class CommandExecutor:
                 timeout=10,
             )
             output = result.stdout.strip()
-            return output if output else "Comando executado."
+            return output if output else self._strings["terminal"]["command_executed"]
         except subprocess.TimeoutExpired:
-            return "Comando expirou."
+            return self._strings["terminal"]["command_timeout"]
 
     def _move_window_to_ultrawide(self, title_match):
         """Move a janela que contém title_match no título para a HDMI-1-0."""
@@ -336,7 +331,7 @@ class CommandExecutor:
             if t:
                 t.join()
             # Frase de loading enquanto abre workspace 2
-            t = self._speak_async(pick("start_work", "loading"))
+            t = self._speak_async(self._pick("start_work", "loading"))
 
             time.sleep(3)
             subprocess.run(["wmctrl", "-s", "1"], capture_output=True)
@@ -357,7 +352,7 @@ class CommandExecutor:
 
             if t:
                 t.join()
-            return pick("start_work", "done")
+            return self._pick("start_work", "done")
         finally:
             if self._tts:
                 self._tts.allow_interrupt = True
@@ -368,11 +363,7 @@ class CommandExecutor:
                 "http://localhost:11434/api/generate",
                 json={
                     "model": self.LLM_MODEL,
-                    "prompt": (
-                        "Você é uma IA sofisticada como o J.A.R.V.I.S. Gere uma frase curta "
-                        "e inspiradora em português do Brasil para seu mestre começar a trabalhar. "
-                        "MÁXIMO 8 palavras. Tom confiante e elegante. Sem aspas. Só a frase."
-                    ),
+                    "prompt": self._strings["executor"]["motivational_prompt"],
                     "stream": False,
                     "keep_alive": 0,
                     "options": {"temperature": 0.9, "num_predict": 25},
@@ -382,7 +373,7 @@ class CommandExecutor:
             phrase = r.json()["response"].strip().strip('"')
             return phrase
         except Exception:
-            return pick("start_work", "done")
+            return self._pick("start_work", "done")
 
     def _do_close_all(self, target, args):
         # Descobre o PID do terminal que roda o Orion
@@ -414,38 +405,29 @@ class CommandExecutor:
                 continue
             subprocess.run(["wmctrl", "-i", "-c", wid], capture_output=True)
             time.sleep(0.3)
-        return pick("close_all")
+        return self._pick("close_all")
 
     def _do_switch_workspace(self, target, args):
         import re
         # Extrai o primeiro número de target, args ou texto original
         match = re.search(r"\d+", f"{target} {args} {self._original_text}")
         if not match:
-            return "Número da área de trabalho inválido."
+            return self._strings["terminal"]["workspace_invalid"]
         num = int(match.group()) - 1
         subprocess.run(["wmctrl", "-s", str(num)], capture_output=True)
-        return pick("switch_workspace", "success", num=num + 1)
+        return self._pick("switch_workspace", "success", num=num + 1)
 
     WEATHER_LOCATION = "Conceição da Aparecida"
-
-
-    WEEKDAY_MAP = {
-        "segunda": 0, "terça": 1, "terca": 1,
-        "quarta": 2, "quinta": 3, "sexta": 4,
-        "sábado": 5, "sabado": 5, "domingo": 6,
-    }
 
     def _resolve_day_index(self, day_str):
         if not day_str:
             return 0
         day = day_str.strip().lower()
-        if day in ("", "hoje"):
-            return 0
-        if day in ("amanhã", "amanha"):
-            return 1
-        if day in ("depois de amanhã", "depois de amanha"):
-            return 2
-        for name, wd in self.WEEKDAY_MAP.items():
+        relative = self._strings["executor"]["relative_days"]
+        for phrase, idx in relative.items():
+            if phrase in day:
+                return idx
+        for name, wd in self._strings["weekdays"].items():
             if name in day:
                 today_wd = datetime.datetime.now().weekday()
                 diff = (wd - today_wd) % 7
@@ -485,12 +467,12 @@ class CommandExecutor:
                 f"pôr do sol: {day['astronomy'][0]['sunset']}."
             )
         elif day_index > 0:
-            parts.append(f"Previsão indisponível para {day_index} dias à frente (máximo 3 dias).")
+            parts.append(self._strings["terminal"]["weather_unavailable"].format(days=day_index))
 
         return " ".join(parts)
 
     def _do_weather(self, target, args):
-        t = self._speak_async(pick("weather", "loading"))
+        t = self._speak_async(self._pick("weather", "loading"))
         location = target.strip() if target else ""
         day_index = self._resolve_day_index(args)
         question = self._original_text
@@ -499,15 +481,17 @@ class CommandExecutor:
         try:
             weather_data = self._fetch_weather(location, day_index)
         except Exception as e:
-            print(f"  wttr.in falhou ({e}), tentando DuckDuckGo...")
+            print(f"  {self._strings['terminal']['weather_error'].format(error=e)}")
             loc = location or self.WEATHER_LOCATION
-            weather_data = self._fetch_search_results(f"previsão do tempo {loc} hoje")
+            weather_data = self._fetch_search_results(
+                self._strings["executor"]["weather_fallback_query"].format(location=loc)
+            )
 
         if t:
             t.join()
 
         if not weather_data:
-            return "Não consegui acessar os dados meteorológicos, Senhor."
+            return self._strings["terminal"]["weather_fail"]
 
         try:
             import re
@@ -515,12 +499,8 @@ class CommandExecutor:
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
                     "model": self.LLM_MODEL,
-                    "prompt": (
-                        f"Dados meteorológicos: {weather_data}\n\n"
-                        f"Pergunta do usuário: \"{question}\"\n\n"
-                        "Responda em português do Brasil de forma direta e concisa, "
-                        "no tom do J.A.R.V.I.S. Foque no que foi perguntado. "
-                        "Trate o usuário por Senhor. Máximo 3 frases curtas."
+                    "prompt": self._strings["executor"]["weather_summary_prompt"].format(
+                        data=weather_data, question=question
                     ),
                     "stream": False,
                     "keep_alive": 0,
@@ -532,8 +512,8 @@ class CommandExecutor:
             text = re.sub(r"[*#_~`>|]", "", text)
             return text
         except Exception as e:
-            print(f"  Erro ao consultar clima: {e}")
-            return "Não consegui acessar os dados meteorológicos, Senhor."
+            print(f"  {self._strings['terminal']['weather_error'].format(error=e)}")
+            return self._strings["terminal"]["weather_fail"]
 
 
     AGENCIA_BRASIL_RSS = "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml"
@@ -558,7 +538,7 @@ class CommandExecutor:
         return "\n".join(headlines)
 
     def _do_news(self, target, args):
-        t = self._speak_async(pick("news", "loading"))
+        t = self._speak_async(self._pick("news", "loading"))
         query = target.strip() if target else ""
         question = self._original_text
 
@@ -566,15 +546,18 @@ class CommandExecutor:
         try:
             headlines = self._fetch_news(query)
         except Exception as e:
-            print(f"  RSS falhou ({e}), tentando DuckDuckGo...")
-            search_query = f"notícias {query} hoje Brasil" if query else "notícias Brasil hoje"
+            print(f"  {self._strings['terminal']['news_error'].format(error=e)}")
+            if query:
+                search_query = self._strings["executor"]["news_fallback_query"].format(query=query)
+            else:
+                search_query = self._strings["executor"]["news_default_query"]
             headlines = self._fetch_search_results(search_query)
 
         if t:
             t.join()
 
         if not headlines:
-            return "Não consegui acessar os canais de notícias, Senhor."
+            return self._strings["terminal"]["news_fail"]
 
         try:
             import re
@@ -582,13 +565,8 @@ class CommandExecutor:
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
                     "model": self.LLM_MODEL,
-                    "prompt": (
-                        f"Manchetes de notícias:\n{headlines}\n\n"
-                        f"Pergunta do usuário: \"{question}\"\n\n"
-                        "Você é o Orion, IA no estilo J.A.R.V.I.S. Resuma as notícias "
-                        "em português do Brasil de forma inteligente e concisa. "
-                        "Destaque o que é mais relevante para a pergunta do usuário. "
-                        "Trate-o por Senhor. Máximo 4 frases curtas e diretas."
+                    "prompt": self._strings["executor"]["news_summary_prompt"].format(
+                        headlines=headlines, question=question
                     ),
                     "stream": False,
                     "keep_alive": 0,
@@ -600,8 +578,8 @@ class CommandExecutor:
             text = re.sub(r"[*#_~`>|]", "", text)
             return text
         except Exception as e:
-            print(f"  Erro ao consultar notícias: {e}")
-            return "Não consegui acessar os canais de notícias, Senhor."
+            print(f"  {self._strings['terminal']['news_error'].format(error=e)}")
+            return self._strings["terminal"]["news_fail"]
 
     def _is_screen_locked(self):
         try:
@@ -638,7 +616,7 @@ class CommandExecutor:
     def _do_unlock_screen(self, target, args):
         subprocess.run(["loginctl", "unlock-session"], capture_output=True)
         self._inhibit_suspend()
-        return pick("unlock_screen")
+        return self._pick("unlock_screen")
 
     def _do_lock_screen(self, target, args):
         subprocess.Popen(
@@ -646,14 +624,14 @@ class CommandExecutor:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return pick("lock_screen")
+        return self._pick("lock_screen")
 
     def _do_shutdown(self, target, args):
         self._pending_shutdown = True
-        return pick("shutdown", "confirm")
+        return self._pick("shutdown", "confirm")
 
     def _execute_shutdown(self):
-        reply = pick("shutdown")
+        reply = self._pick("shutdown")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -661,7 +639,7 @@ class CommandExecutor:
         return None
 
     def _do_restart(self, target, args):
-        reply = pick("restart")
+        reply = self._pick("restart")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -669,7 +647,7 @@ class CommandExecutor:
         return None
 
     def _do_suspend(self, target, args):
-        reply = pick("suspend")
+        reply = self._pick("suspend")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -682,7 +660,7 @@ class CommandExecutor:
             ["brightnessctl", "set", f"+{pct}%"],
             capture_output=True,
         )
-        return pick("brightness_up")
+        return self._pick("brightness_up")
 
     def _do_brightness_down(self, target, args):
         pct = args if args else "10"
@@ -690,7 +668,7 @@ class CommandExecutor:
             ["brightnessctl", "set", f"{pct}%-"],
             capture_output=True,
         )
-        return pick("brightness_down")
+        return self._pick("brightness_down")
 
     def _do_battery(self, target, args):
         try:
@@ -701,10 +679,10 @@ class CommandExecutor:
             for line in result.stdout.split("\n"):
                 if "percentage" in line:
                     pct = line.split(":")[-1].strip()
-                    return f"Bateria em {pct}, Senhor."
-            return "Informação de bateria indisponível, Senhor."
+                    return self._strings["terminal"]["battery_info"].format(pct=pct)
+            return self._strings["terminal"]["battery_unavailable"]
         except Exception:
-            return "Não consegui acessar os dados da bateria, Senhor."
+            return self._strings["terminal"]["battery_error"]
 
     def _do_system_info(self, target, args):
         try:
@@ -725,32 +703,34 @@ class CommandExecutor:
             disk_lines = disk.stdout.strip().split("\n")
             disk_data = disk_lines[1].split() if len(disk_lines) > 1 else []
             disk_pct = disk_data[2] if len(disk_data) > 2 else "?"
-            return (
-                f"Sistema ativo {uptime.replace('up ', '')}. "
-                f"Memória: {mem_used} de {mem_total}. "
-                f"Disco raiz: {disk_pct} em uso."
+            return self._strings["terminal"]["system_info_template"].format(
+                uptime=uptime.replace("up ", ""),
+                mem_used=mem_used,
+                mem_total=mem_total,
+                disk_pct=disk_pct,
             )
         except Exception:
-            return "Falha ao coletar dados do sistema, Senhor."
+            return self._strings["terminal"]["system_info_error"]
 
     def _do_empty_trash(self, target, args):
         subprocess.run(
             ["gio", "trash", "--empty"],
             capture_output=True,
         )
-        return pick("empty_trash")
+        return self._pick("empty_trash")
 
     def _do_timer(self, target, args):
         import re
         raw = f"{target} {args} {self._original_text}"
         match = re.search(r"(\d+)", raw)
         if not match:
-            return "Não identifiquei a duração do timer, Senhor."
+            return self._strings["terminal"]["timer_no_duration"]
         value = int(match.group(1))
-        if any(w in raw.lower() for w in ("hora", "hour")):
+        timer_words = self._strings["executor"]["timer_words"]
+        if any(w in raw.lower() for w in timer_words["hours"]):
             seconds = value * 3600
             label = f"{value} hora{'s' if value > 1 else ''}"
-        elif any(w in raw.lower() for w in ("segundo", "second", "seg")):
+        elif any(w in raw.lower() for w in timer_words["seconds"]):
             seconds = value
             label = f"{value} segundo{'s' if value > 1 else ''}"
         else:
@@ -760,17 +740,17 @@ class CommandExecutor:
         def _alarm():
             time.sleep(seconds)
             if self._tts:
-                self._tts.speak(f"Senhor, o timer de {label} expirou.")
+                self._tts.speak(self._strings["terminal"]["timer_expired"].format(duration=label))
             subprocess.run(
                 ["paplay", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"],
                 capture_output=True,
             )
 
         threading.Thread(target=_alarm, daemon=True).start()
-        return pick("timer", "success", duration=label)
+        return self._pick("timer", "success", duration=label)
 
     def _do_logout(self, target, args):
-        reply = pick("logout")
+        reply = self._pick("logout")
         if self._tts:
             self._tts.speak(reply)
         time.sleep(1)
@@ -786,17 +766,17 @@ class CommandExecutor:
         state = args.strip().lower() if args else "on"
         device_info = SMART_HOME_DEVICES.get(device)
         if not device_info:
-            return f"Dispositivo '{target}' não cadastrado, Senhor."
+            return self._strings["terminal"]["device_not_found"].format(target=target)
         event = device_info.get(state)
         if not event:
-            return f"Ação '{args}' inválida para {target}, Senhor."
+            return self._strings["terminal"]["device_action_invalid"].format(args=args, target=target)
         try:
             r = requests.get(IFTTT_URL.format(event=event), timeout=10)
             r.raise_for_status()
             label = target.capitalize()
-            return pick("smart_home", state, device=label)
+            return self._pick("smart_home", state, device=label)
         except Exception:
-            return pick("smart_home", "error", device=target.capitalize())
+            return self._pick("smart_home", "error", device=target.capitalize())
 
     # ── Analyze screen ──────────────────────────────────────────
 
@@ -820,13 +800,13 @@ class CommandExecutor:
         name = target.strip().lower() if target else ""
         is_mouse = name in ("mouse", "cursor", "aqui")
         if not is_mouse:
-            name = MONITOR_ALIASES.get(name, name)
+            name = self._strings["monitors"].get(name, name)
             if name and name not in MONITORS:
-                return f"Monitor '{target}' não encontrado, Senhor."
+                return self._strings["terminal"]["monitor_not_found"].format(target=target)
 
         try:
             # Stage 1: Capture
-            self._speak_sync(pick("analyze_screen", "capturing"))
+            self._speak_sync(self._pick("analyze_screen", "capturing"))
 
             img_path = "/tmp/orion_screen_analyze.png"
             full_path = "/tmp/orion_screen_full.png"
@@ -842,7 +822,7 @@ class CommandExecutor:
                 )
 
             if not os.path.isfile(full_path):
-                return "Falha na captura de tela, Senhor."
+                return self._strings["terminal"]["screen_capture_fail"]
 
             if is_mouse:
                 # Crop region around mouse cursor
@@ -869,14 +849,14 @@ class CommandExecutor:
                 os.rename(full_path, img_path)
 
             if not os.path.isfile(img_path):
-                return "Falha na captura de tela, Senhor."
+                return self._strings["terminal"]["screen_capture_fail"]
 
             with open(img_path, "rb") as f:
                 img_b64 = base64.b64encode(f.read()).decode()
 
             # Stage 2: Swap models — liberar VRAM para o modelo de visão
-            self._speak_sync(pick("analyze_screen", "swapping"))
-            print("  Liberando VRAM para modelo de visão...")
+            self._speak_sync(self._pick("analyze_screen", "swapping"))
+            print(f"  {self._strings['terminal']['vision_freeing_vram']}")
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={"model": self.LLM_MODEL, "keep_alive": 0},
@@ -887,8 +867,8 @@ class CommandExecutor:
             time.sleep(1)
 
             # Stage 3: Analyze — vision model extracts all text/content
-            self._speak_sync(pick("analyze_screen", "analyzing"))
-            print(f"  Carregando modelo de visão ({VISION_MODEL})...")
+            self._speak_sync(self._pick("analyze_screen", "analyzing"))
+            print(f"  {self._strings['terminal']['vision_loading'].format(model=VISION_MODEL)}")
             r = requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
@@ -906,11 +886,11 @@ class CommandExecutor:
             )
             r.raise_for_status()
             analysis = r.json()["response"].strip()
-            print(f"  Análise bruta: {analysis}")
+            print(f"  {self._strings['terminal']['vision_raw'].format(analysis=analysis)}")
 
             # Stage 4: Restore models
-            self._speak_sync(pick("analyze_screen", "restoring"))
-            print("  Restaurando modelos...")
+            self._speak_sync(self._pick("analyze_screen", "restoring"))
+            print(f"  {self._strings['terminal']['vision_restoring']}")
             requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={"model": VISION_MODEL, "keep_alive": 0},
@@ -919,7 +899,7 @@ class CommandExecutor:
             time.sleep(1)
             if self._tts:
                 self._tts.reclaim_vram()
-            print("  Modelos restaurados.")
+            print(f"  {self._strings['terminal']['vision_restored']}")
 
             os.remove(img_path)
 
@@ -928,25 +908,15 @@ class CommandExecutor:
             question = self._original_text
             task = args.strip().lower() if args else ""
 
-            task_instructions = {
-                "traduzir": "Traduza o texto extraído da tela para português do Brasil.",
-                "resumir": "Resuma o conteúdo da tela de forma concisa.",
-                "ler": "Leia e reproduza o texto visível na tela.",
-                "explicar": "Explique o conteúdo da tela de forma clara e didática.",
-            }
-            task_hint = task_instructions.get(task, "Responda à pergunta do usuário sobre o conteúdo da tela.")
+            task_instructions = self._strings["executor"]["screen_task_instructions"]
+            task_hint = task_instructions.get(task, self._strings["executor"]["screen_task_default"])
 
             r = requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
                     "model": self.LLM_MODEL,
-                    "prompt": (
-                        f"Conteúdo extraído da tela:\n{analysis}\n\n"
-                        f"Pergunta do usuário: \"{question}\"\n\n"
-                        f"Tarefa: {task_hint}\n\n"
-                        "Responda em português do Brasil de forma concisa, "
-                        "no tom do J.A.R.V.I.S. Trate-o por Senhor. "
-                        "Máximo 5 frases. Foque no que foi pedido."
+                    "prompt": self._strings["executor"]["screen_analysis_prompt"].format(
+                        analysis=analysis, question=question, task_hint=task_hint
                     ),
                     "stream": False,
                     "keep_alive": 0,
@@ -961,7 +931,7 @@ class CommandExecutor:
         except Exception as e:
             print(f"  Erro na análise de tela: {e}")
             self._restore_llm()
-            return "Falha na análise visual, Senhor."
+            return self._strings["terminal"]["screen_analysis_fail"]
 
     def _get_selected_text(self):
         """Tries multiple methods to get selected text."""
@@ -1009,40 +979,29 @@ class CommandExecutor:
         return ""
 
     def _do_analyze_selection(self, target, args):
-        self._speak_sync(pick("analyze_selection", "loading"))
+        self._speak_sync(self._pick("analyze_selection", "loading"))
 
         selected = self._get_selected_text()
 
         if not selected:
-            return pick("analyze_selection", "empty")
+            return self._pick("analyze_selection", "empty")
 
-        print(f"  Texto selecionado ({len(selected)} chars): {selected[:100]}...")
+        print(f"  {self._strings['terminal']['selection_chars'].format(count=len(selected), preview=selected[:100])}")
 
         import re
         question = self._original_text
         task = args.strip().lower() if args else ""
 
-        task_instructions = {
-            "traduzir": "Traduza o texto para português do Brasil. Se já estiver em português, traduza para inglês.",
-            "resumir": "Resuma o texto de forma concisa.",
-            "ler": "Leia e reproduza o texto.",
-            "explicar": "Explique o conteúdo do texto de forma clara e didática.",
-            "corrigir": "Corrija erros de gramática e ortografia no texto. Mostre o texto corrigido.",
-        }
-        task_hint = task_instructions.get(task, "Responda à pergunta do usuário sobre o texto.")
+        task_instructions = self._strings["executor"]["selection_task_instructions"]
+        task_hint = task_instructions.get(task, self._strings["executor"]["selection_task_default"])
 
         try:
             r = requests.post(
                 f"{self.OLLAMA_URL}/api/generate",
                 json={
                     "model": self.LLM_MODEL,
-                    "prompt": (
-                        f"Texto selecionado pelo usuário:\n\"{selected}\"\n\n"
-                        f"Pedido do usuário: \"{question}\"\n\n"
-                        f"Tarefa: {task_hint}\n\n"
-                        "Responda em português do Brasil de forma concisa, "
-                        "no tom do J.A.R.V.I.S. Trate-o por Senhor. "
-                        "Foque no que foi pedido."
+                    "prompt": self._strings["executor"]["selection_analysis_prompt"].format(
+                        selected=selected, question=question, task_hint=task_hint
                     ),
                     "stream": False,
                     "keep_alive": 0,
@@ -1055,7 +1014,7 @@ class CommandExecutor:
             return text
         except Exception as e:
             print(f"  Erro na análise de seleção: {e}")
-            return "Falha ao processar o texto selecionado, Senhor."
+            return self._strings["terminal"]["selection_analysis_fail"]
 
     def _speak_sync(self, text):
         """Fala e espera terminar antes de continuar."""
@@ -1195,7 +1154,7 @@ class CommandExecutor:
         self._restore_demo_volume()
         if self._resume_listening:
             self._resume_listening()
-        return pick("close_demo")
+        return self._pick("close_demo")
 
     def _get_window_ids(self):
         """Returns set of current window IDs."""
