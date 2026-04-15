@@ -1,36 +1,34 @@
 {% extends "base.html" %}
-{% block title %}Knowledge{% endblock %}
+{% block title %}Orion — Knowledge{% endblock %}
 
 {% block content %}
-<div class="px-8 py-8 max-w-5xl">
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-100">Knowledge Base</h1>
-        <p class="text-gray-400 mt-1">View and edit project documentation and agent skills</p>
+<div class="page">
+    <div style="margin-bottom: 2rem;">
+        <div class="page-title">Knowledge Base</div>
+        <div class="page-desc">Project documentation and agent skills</div>
     </div>
 
     <!-- Knowledge files -->
-    <div class="mb-8">
-        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div style="margin-bottom: 2rem;">
+        <div class="section-label">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
             </svg>
             knowledge/
-        </h2>
-        <div class="space-y-2">
+        </div>
+        <div class="file-list">
             {% for file in files %}
-            <a href="/knowledge/edit/{{ file.path }}"
-               class="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-5 py-3.5 hover:border-orion-700 transition-colors group">
-                <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5 text-gray-500 group-hover:text-orion-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="/knowledge/edit/{{ file.path }}" class="file-item">
+                <div class="file-item-left">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                               d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                     </svg>
-                    <span class="text-gray-200 font-medium">{{ file.name }}</span>
+                    {{ file.name }}
                 </div>
-                <svg class="w-5 h-5 text-gray-600 group-hover:text-orion-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                <svg class="file-item-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
             </a>
             {% endfor %}
@@ -39,27 +37,25 @@
 
     <!-- Skills -->
     <div>
-        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div class="section-label">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                       d="M13 10V3L4 14h7v7l9-11h-7z"/>
             </svg>
             .claude/skills/
-        </h2>
-        <div class="space-y-2">
+        </div>
+        <div class="file-list">
             {% for skill in skills %}
-            <a href="/knowledge/edit/{{ skill.path }}"
-               class="flex items-center justify-between bg-gray-900 border border-gray-800 rounded-lg px-5 py-3.5 hover:border-purple-700 transition-colors group">
-                <div class="flex items-center gap-3">
-                    <svg class="w-5 h-5 text-gray-500 group-hover:text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <a href="/knowledge/edit/{{ skill.path }}" class="file-item skill">
+                <div class="file-item-left">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
                               d="M13 10V3L4 14h7v7l9-11h-7z"/>
                     </svg>
-                    <span class="text-gray-200 font-medium">{{ skill.name }}</span>
+                    {{ skill.name }}
                 </div>
-                <svg class="w-5 h-5 text-gray-600 group-hover:text-purple-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                <svg class="file-item-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
                 </svg>
             </a>
             {% endfor %}

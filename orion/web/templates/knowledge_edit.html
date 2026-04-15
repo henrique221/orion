@@ -1,31 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Edit — {{ filename }}{% endblock %}
+{% block title %}{{ filename }} — Orion{% endblock %}
 
 {% block content %}
-<div class="px-8 py-8 h-full flex flex-col">
-    <!-- Header -->
-    <div class="flex items-center justify-between mb-5">
-        <div class="flex items-center gap-3">
-            <a href="/knowledge" class="text-gray-500 hover:text-gray-300 transition-colors">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+<div class="page-wide">
+    <div class="editor-header">
+        <div class="editor-title-group">
+            <a href="/knowledge" class="editor-back">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
                 </svg>
             </a>
             <div>
-                <h1 class="text-xl font-bold text-gray-100">{{ filename }}</h1>
-                <p class="text-xs text-gray-500 font-mono">
-                    {% if is_skill %}.claude/skills/{{ filepath }}{% else %}knowledge/{{ filepath }}{% endif %}
-                </p>
+                <div class="editor-filename">{{ filename }}</div>
+                <div class="editor-path">{% if is_skill %}.claude/skills/{{ filepath }}{% else %}knowledge/{{ filepath }}{% endif %}</div>
             </div>
         </div>
-        <div class="flex items-center gap-3">
-            <button type="button" id="toggle-preview"
-                    class="px-3 py-1.5 text-sm text-gray-400 border border-gray-700 rounded-lg hover:bg-gray-800 hover:text-gray-200 transition-colors">
+        <div class="editor-actions">
+            <button type="button" id="toggle-preview" class="btn btn-ghost">
+                <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
                 Preview
             </button>
-            <button type="submit" form="editor-form"
-                    class="px-4 py-1.5 text-sm font-medium bg-orion-600 text-white rounded-lg hover:bg-orion-700 transition-colors flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button type="submit" form="editor-form" class="btn btn-primary">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                 </svg>
                 Save
@@ -33,23 +32,12 @@
         </div>
     </div>
 
-    <!-- Editor -->
-    <form id="editor-form" action="/knowledge/save/{{ filepath }}" method="post" class="flex-1 flex flex-col min-h-0">
-        <div class="flex-1 flex gap-4 min-h-0">
-            <!-- Textarea -->
-            <textarea name="content" id="editor-textarea" spellcheck="false"
-                      class="flex-1 bg-gray-900 border border-gray-800 rounded-xl p-5 text-gray-200 font-mono text-sm
-                             leading-relaxed resize-none focus:outline-none focus:border-orion-600 focus:ring-1 focus:ring-orion-600/30">{{ content }}</textarea>
-
-            <!-- Preview pane (hidden by default) -->
-            <div id="preview-pane"
-                 class="hidden flex-1 bg-gray-900 border border-gray-800 rounded-xl p-5 overflow-auto prose prose-invert prose-sm max-w-none">
-            </div>
-        </div>
+    <form id="editor-form" action="/knowledge/save/{{ filepath }}" method="post" class="editor-area">
+        <textarea name="content" id="editor-textarea" spellcheck="false">{{ content }}</textarea>
+        <div id="preview-pane" class="hidden prose"></div>
     </form>
 </div>
 
-<!-- Markdown preview with marked.js -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
     const textarea = document.getElementById('editor-textarea');
@@ -60,19 +48,20 @@
     toggleBtn.addEventListener('click', () => {
         previewVisible = !previewVisible;
         preview.classList.toggle('hidden', !previewVisible);
-        toggleBtn.textContent = previewVisible ? 'Editor' : 'Preview';
-        if (previewVisible) {
-            preview.innerHTML = marked.parse(textarea.value);
+        toggleBtn.querySelector('span, :last-child').textContent;
+        const label = toggleBtn.childNodes;
+        for (const n of label) {
+            if (n.nodeType === 3 && n.textContent.trim()) {
+                n.textContent = previewVisible ? ' Editor' : ' Preview';
+            }
         }
+        if (previewVisible) preview.innerHTML = marked.parse(textarea.value);
     });
 
     textarea.addEventListener('input', () => {
-        if (previewVisible) {
-            preview.innerHTML = marked.parse(textarea.value);
-        }
+        if (previewVisible) preview.innerHTML = marked.parse(textarea.value);
     });
 
-    // Ctrl+S / Cmd+S to save
     document.addEventListener('keydown', (e) => {
         if ((e.ctrlKey || e.metaKey) && e.key === 's') {
             e.preventDefault();

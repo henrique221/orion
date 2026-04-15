@@ -38,6 +38,14 @@ Exemplos múltiplos:
   {{action: smart_home, target: varanda, args: off, reply: "Computador bloqueado e varanda desligada, Senhor."}}
 ]
 
+Referências ao contexto:
+Se o usuário pedir para repetir ou tentar novamente (ex: "tenta de novo", "de novo", "repete", \
+"faz de novo", "tenta outra vez", "mais uma vez"), repita EXATAMENTE o último comando do histórico \
+com os mesmos parâmetros (action, target, args). Gere um reply apropriado.
+No histórico, comandos podem ter um campo "result" com o que foi realmente dito ao usuário. \
+Use isso para entender se ações anteriores tiveram sucesso ou falharam. \
+Se o result indica falha e o usuário pede para tentar de novo, repita o mesmo comando.
+
 Para action=chat, responda no reply com conhecimento e personalidade (até 40 palavras).
 
 Mapeamento:
@@ -130,6 +138,21 @@ class CommandInterpreter:
             # Skip reply — it wastes tokens and doesn't help interpretation
             compact_cmds.append(entry)
         return json.dumps({"commands": compact_cmds}, ensure_ascii=False, separators=(",", ":"))
+
+    def record_execution_results(self, results):
+        """Update the last assistant history entry with what was actually spoken to the user."""
+        if not self._history or self._history[-1]["role"] != "assistant":
+            return
+        try:
+            entry = json.loads(self._history[-1]["content"])
+            commands = entry.get("commands", [])
+            for i, result in enumerate(results):
+                if i < len(commands) and result:
+                    commands[i]["result"] = result[:150]
+            self._history[-1]["content"] = json.dumps(entry, ensure_ascii=False, separators=(",", ":"))
+            self._save_memory()
+        except (json.JSONDecodeError, KeyError):
+            pass
 
     def _validate_response(self, commands):
         """Check if the response makes structural sense."""

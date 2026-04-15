@@ -143,6 +143,7 @@ class VoiceAssistant:
                 return
 
             interrupted = False
+            execution_results = []
             for command in commands:
                 print(
                     f"  Acao: {command.get('action')} -> "
@@ -151,8 +152,10 @@ class VoiceAssistant:
 
                 result = self.executor.execute(command, original_text=text)
                 if result == "__END_CONVERSATION__":
+                    self.interpreter.record_execution_results(execution_results)
                     return
                 response = result or command.get("reply", "")
+                execution_results.append(response)
                 if response:
                     print(f"  Resposta: {response}")
                     self.tts.speak(response)
@@ -160,6 +163,7 @@ class VoiceAssistant:
                         print("  Interrompido pelo usuário.")
                         interrupted = True
                         break
+            self.interpreter.record_execution_results(execution_results)
             if interrupted:
                 continue
 

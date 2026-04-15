@@ -1,174 +1,152 @@
 {% extends "base.html" %}
-{% block title %}Settings{% endblock %}
+{% block title %}Orion — Settings{% endblock %}
 
 {% block content %}
-<div class="px-8 py-8 max-w-5xl">
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-100">Settings</h1>
-        <p class="text-gray-400 mt-1">Configure Orion voice assistant options</p>
+<div class="page">
+    <div style="margin-bottom: 2rem;">
+        <div class="page-title">Settings</div>
+        <div class="page-desc">System configuration overview</div>
     </div>
 
-    <!-- Settings sections -->
-    <div class="space-y-6">
-        <!-- General -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-800">
-                <h2 class="text-base font-semibold text-gray-200 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
-                    </svg>
-                    General
-                </h2>
-            </div>
-            <div class="px-6 py-5 space-y-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Language</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Voice recognition and response language</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">pt-BR</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Assistant Name</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Wake word and identity</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">Orion</span>
-                </div>
-            </div>
+    <!-- General -->
+    <div class="settings-section">
+        <div class="settings-section-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+            </svg>
+            General
         </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Language</div>
+                <div class="settings-hint">Voice recognition and response language</div>
+            </div>
+            <span class="settings-val">pt-BR</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Assistant Name</div>
+                <div class="settings-hint">Wake word and identity</div>
+            </div>
+            <span class="settings-val">Orion</span>
+        </div>
+    </div>
 
-        <!-- LLM -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-800">
-                <h2 class="text-base font-semibold text-gray-200 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
-                    </svg>
-                    LLM
-                </h2>
-            </div>
-            <div class="px-6 py-5 space-y-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Model</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Ollama model for command interpretation</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">qwen2.5:1.5b</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Vision Model</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Model for screen analysis</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">moondream</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Temperature</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Lower = more deterministic</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">0.1</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Context Size</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Token context window</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">4096</span>
-                </div>
-            </div>
+    <!-- LLM -->
+    <div class="settings-section">
+        <div class="settings-section-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            LLM
         </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Model</div>
+                <div class="settings-hint">Ollama model for command interpretation</div>
+            </div>
+            <span class="settings-val">qwen2.5:1.5b</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Vision Model</div>
+                <div class="settings-hint">Model for screen analysis</div>
+            </div>
+            <span class="settings-val">moondream</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Temperature</div>
+                <div class="settings-hint">Lower = more deterministic</div>
+            </div>
+            <span class="settings-val">0.1</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Context Size</div>
+                <div class="settings-hint">Token context window</div>
+            </div>
+            <span class="settings-val">4096</span>
+        </div>
+    </div>
 
-        <!-- Audio -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-800">
-                <h2 class="text-base font-semibold text-gray-200 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-                    </svg>
-                    Audio
-                </h2>
-            </div>
-            <div class="px-6 py-5 space-y-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Clap Threshold</div>
-                        <div class="text-xs text-gray-500 mt-0.5">RMS energy for double-clap detection</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">0.25</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Wake Word VAD</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Voice activity detection threshold</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">0.35</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Speech VAD</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Voice activity detection for speech recognition</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">0.4</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Silence Timeout</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Seconds of silence before ending recording</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">1.5s</span>
-                </div>
-            </div>
+    <!-- Audio -->
+    <div class="settings-section">
+        <div class="settings-section-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
+            </svg>
+            Audio
         </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Clap Threshold</div>
+                <div class="settings-hint">RMS energy for double-clap detection</div>
+            </div>
+            <span class="settings-val">0.25</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Wake Word VAD</div>
+                <div class="settings-hint">Voice activity detection threshold</div>
+            </div>
+            <span class="settings-val">0.35</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Speech VAD</div>
+                <div class="settings-hint">Voice activity for speech recognition</div>
+            </div>
+            <span class="settings-val">0.4</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Silence Timeout</div>
+                <div class="settings-hint">Seconds of silence before ending recording</div>
+            </div>
+            <span class="settings-val">1.5s</span>
+        </div>
+    </div>
 
-        <!-- TTS -->
-        <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-            <div class="px-6 py-4 border-b border-gray-800">
-                <h2 class="text-base font-semibold text-gray-200 flex items-center gap-2">
-                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
-                    </svg>
-                    Text-to-Speech
-                </h2>
-            </div>
-            <div class="px-6 py-5 space-y-5">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Primary Engine</div>
-                        <div class="text-xs text-gray-500 mt-0.5">TTS backend priority: XTTS v2 > Kokoro > Piper > espeak</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">XTTS v2</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Kokoro Pitch</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Pitch shift factor</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">0.88</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <div>
-                        <div class="text-sm font-medium text-gray-300">Kokoro Speed</div>
-                        <div class="text-xs text-gray-500 mt-0.5">Playback speed multiplier</div>
-                    </div>
-                    <span class="text-sm text-gray-400 font-mono bg-gray-800 px-3 py-1 rounded">1.35x</span>
-                </div>
-            </div>
+    <!-- TTS -->
+    <div class="settings-section">
+        <div class="settings-section-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+            </svg>
+            Text-to-Speech
         </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Primary Engine</div>
+                <div class="settings-hint">Fallback: XTTS v2 > Kokoro > Piper > espeak</div>
+            </div>
+            <span class="settings-val">XTTS v2</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Kokoro Pitch</div>
+                <div class="settings-hint">Pitch shift factor</div>
+            </div>
+            <span class="settings-val">0.88</span>
+        </div>
+        <div class="settings-row">
+            <div>
+                <div class="settings-key">Kokoro Speed</div>
+                <div class="settings-hint">Playback speed multiplier</div>
+            </div>
+            <span class="settings-val">1.35x</span>
+        </div>
+    </div>
 
-        <!-- Info box -->
-        <div class="bg-gray-900/50 border border-gray-800 rounded-xl px-6 py-4">
-            <p class="text-sm text-gray-500">
-                Settings are currently read-only. Editable configuration is coming soon.
-                To change values now, edit the source files directly or use the
-                <a href="/knowledge" class="text-orion-400 hover:underline">Knowledge</a> section.
-            </p>
-        </div>
+    <div class="info-banner">
+        Settings are currently read-only. Editable configuration is coming soon.
+        To change values now, edit the source files directly or use the
+        <a href="/knowledge">Knowledge</a> section.
     </div>
 </div>
 {% endblock %}

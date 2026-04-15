@@ -1,85 +1,129 @@
 {% extends "base.html" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Orion — Overview{% endblock %}
 
 {% block content %}
-<div class="px-8 py-8 max-w-5xl">
-    <div class="mb-8">
-        <h1 class="text-2xl font-bold text-gray-100">Dashboard</h1>
-        <p class="text-gray-400 mt-1">Orion voice assistant configuration panel</p>
+<div class="page">
+    <div style="margin-bottom: 2rem;">
+        <div class="page-title">System Overview</div>
+        <div class="page-desc">Orion voice assistant control panel</div>
     </div>
 
-    <!-- Stats cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
-        <a href="/knowledge" class="block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-orion-700 transition-colors group">
-            <div class="flex items-center justify-between mb-3">
-                <div class="w-10 h-10 rounded-lg bg-blue-900/40 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                    </svg>
-                </div>
-                <svg class="w-5 h-5 text-gray-600 group-hover:text-orion-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+    <!-- Stat cards -->
+    <div class="stat-grid">
+        <a href="/knowledge" class="stat-card">
+            <div class="stat-icon cyan">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
             </div>
-            <div class="text-2xl font-bold text-gray-100">{{ knowledge_count }}</div>
-            <div class="text-sm text-gray-500">Knowledge Files</div>
+            <div class="stat-value">{{ knowledge_count }}</div>
+            <div class="stat-label">Knowledge Files</div>
         </a>
 
-        <a href="/knowledge" class="block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-orion-700 transition-colors group">
-            <div class="flex items-center justify-between mb-3">
-                <div class="w-10 h-10 rounded-lg bg-purple-900/40 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M13 10V3L4 14h7v7l9-11h-7z"/>
-                    </svg>
-                </div>
-                <svg class="w-5 h-5 text-gray-600 group-hover:text-orion-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        <a href="/knowledge" class="stat-card purple">
+            <div class="stat-icon purple">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M13 10V3L4 14h7v7l9-11h-7z"/>
                 </svg>
             </div>
-            <div class="text-2xl font-bold text-gray-100">{{ skills_count }}</div>
-            <div class="text-sm text-gray-500">Claude Skills</div>
+            <div class="stat-value">{{ skills_count }}</div>
+            <div class="stat-label">Agent Skills</div>
         </a>
 
-        <a href="/settings" class="block bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-orion-700 transition-colors group">
-            <div class="flex items-center justify-between mb-3">
-                <div class="w-10 h-10 rounded-lg bg-amber-900/40 flex items-center justify-center">
-                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-                    </svg>
-                </div>
-                <svg class="w-5 h-5 text-gray-600 group-hover:text-orion-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        <a href="/settings" class="stat-card amber">
+            <div class="stat-icon amber">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
                 </svg>
             </div>
-            <div class="text-2xl font-bold text-gray-100">Settings</div>
-            <div class="text-sm text-gray-500">Configure Orion</div>
+            <div class="stat-value" style="font-size: 1.25rem; line-height: 2rem;">Configure</div>
+            <div class="stat-label">Settings</div>
         </a>
     </div>
 
-    <!-- Quick info -->
-    <div class="bg-gray-900 border border-gray-800 rounded-xl p-6">
-        <h2 class="text-lg font-semibold text-gray-200 mb-4">Quick Info</h2>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div class="flex items-center gap-3">
-                <span class="text-gray-500 w-32">Language</span>
-                <span class="text-gray-300">Portugues (BR)</span>
+    <!-- Pipeline -->
+    <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M13 5l7 7-7 7M5 5l7 7-7 7"/>
+            </svg>
+            Processing Pipeline
+        </div>
+        <div class="pipeline">
+            <div class="pipeline-node">
+                <div class="pipeline-dot">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/></svg>
+                </div>
+                <span class="pipeline-label">Mic</span>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="text-gray-500 w-32">LLM Model</span>
-                <span class="text-gray-300 font-mono">qwen2.5:1.5b</span>
+            <div class="pipeline-arrow"></div>
+            <div class="pipeline-node">
+                <div class="pipeline-dot">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                </div>
+                <span class="pipeline-label">Wake</span>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="text-gray-500 w-32">STT Model</span>
-                <span class="text-gray-300 font-mono">faster-whisper large-v3</span>
+            <div class="pipeline-arrow"></div>
+            <div class="pipeline-node">
+                <div class="pipeline-dot">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"/></svg>
+                </div>
+                <span class="pipeline-label">STT</span>
             </div>
-            <div class="flex items-center gap-3">
-                <span class="text-gray-500 w-32">TTS Engine</span>
-                <span class="text-gray-300 font-mono">XTTS v2 / Kokoro / Piper</span>
+            <div class="pipeline-arrow"></div>
+            <div class="pipeline-node">
+                <div class="pipeline-dot">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                </div>
+                <span class="pipeline-label">LLM</span>
+            </div>
+            <div class="pipeline-arrow"></div>
+            <div class="pipeline-node">
+                <div class="pipeline-dot">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+                <span class="pipeline-label">Exec</span>
+            </div>
+            <div class="pipeline-arrow"></div>
+            <div class="pipeline-node">
+                <div class="pipeline-dot">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                </div>
+                <span class="pipeline-label">TTS</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- System info -->
+    <div class="card">
+        <div class="card-header">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            System Configuration
+        </div>
+        <div class="sys-grid">
+            <div class="sys-item">
+                <span class="sys-key">Language</span>
+                <span class="sys-val">pt-BR</span>
+            </div>
+            <div class="sys-item">
+                <span class="sys-key">LLM Model</span>
+                <span class="sys-val">qwen2.5:1.5b</span>
+            </div>
+            <div class="sys-item">
+                <span class="sys-key">STT Engine</span>
+                <span class="sys-val">faster-whisper large-v3</span>
+            </div>
+            <div class="sys-item">
+                <span class="sys-key">TTS Engine</span>
+                <span class="sys-val">XTTS v2 / Kokoro / Piper</span>
             </div>
         </div>
     </div>
