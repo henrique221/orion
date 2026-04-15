@@ -205,3 +205,26 @@ Runs in daemon thread, clears/redraws 5-line face + scrolling log output below.
 - `MONITORS` — multi-monitor coordinates (ultrawide, notebook, inferior)
 - `SMART_HOME_DEVICES` — IFTTT device event mappings
 - `RESPONSE_TEMPLATES` — categorized random response phrases
+
+---
+
+## Web Settings Panel (web/app.py)
+
+**Role**: Browser-based UI for viewing/editing project knowledge and configuration. Runs as a standalone Flask server, independent of the voice assistant.
+
+**Launch**: `python run_web.py` → opens at `http://127.0.0.1:5000`
+
+**Pages**:
+- `/` — Dashboard: overview stats, quick info
+- `/knowledge` — List all knowledge/*.md files and .claude/skills/
+- `/knowledge/edit/<path>` — Markdown editor with live preview, Ctrl+S save
+- `/settings` — Configuration overview (General, LLM, Audio, TTS sections)
+
+**API endpoints** (JSON, for programmatic access):
+- `GET /api/knowledge` — list all knowledge files and skills
+- `GET /api/knowledge/<path>` — read file content
+- `PUT /api/knowledge/<path>` — write file content
+
+**Security**: Binds to localhost only. Path traversal protection via `_safe_path()`.
+
+**Tech stack**: Flask, Jinja2 templates, Tailwind CSS (CDN), marked.js (CDN)

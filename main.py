@@ -1,8 +1,10 @@
 import signal
 import sys
+import threading
 import time
 
 from orion.voice_assistant import VoiceAssistant
+from orion.web.app import app as web_app, find_free_port
 
 BANNER = r"""
    ██████╗ ██████╗ ██╗ ██████╗ ███╗   ██╗
@@ -27,6 +29,15 @@ def main():
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
+
+    web_port = find_free_port()
+    web_thread = threading.Thread(
+        target=web_app.run,
+        kwargs={"host": "127.0.0.1", "port": web_port, "debug": False},
+        daemon=True,
+    )
+    web_thread.start()
+    print(f"  Settings panel: http://127.0.0.1:{web_port}\n")
 
     try:
         assistant.start()

@@ -136,7 +136,7 @@ command -v ollama &>/dev/null && echo "  ollama: OK" || { echo "  ollama: FALHOU
 [ -f "$PIPER_DIR/${PIPER_VOICE}.onnx" ] && echo "  voz pt-BR: OK" || { echo "  voz pt-BR: FALHOU"; OK=false; }
 [ -f "$XTTS_DIR/model.pth" ] && echo "  xtts v2: OK" || { echo "  xtts v2: FALHOU"; OK=false; }
 source .venv/bin/activate
-python -c "import sounddevice, soundfile, numpy, requests, faster_whisper, TTS, torch" 2>/dev/null && echo "  python deps: OK" || { echo "  python deps: FALHOU"; OK=false; }
+python -c "import sounddevice, soundfile, numpy, requests, faster_whisper, TTS, torch, flask" 2>/dev/null && echo "  python deps: OK" || { echo "  python deps: FALHOU"; OK=false; }
 
 echo ""
 if $OK; then

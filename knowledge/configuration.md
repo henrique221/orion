@@ -139,6 +139,19 @@ IFTTT webhook URL: `https://maker.ifttt.com/trigger/{event}/with/key/{IFTTT_KEY}
 | Primary API | wttr.in (JSON format) |
 | Fallback | DuckDuckGo search |
 
+## Web Settings Panel
+
+| Setting | Value |
+|---------|-------|
+| Host | 127.0.0.1 (localhost only) |
+| Port | 5000 |
+| Launch | `python run_web.py` |
+| Debug mode | Enabled by default (disable with `--no-debug`) |
+
+Editable content paths:
+- Knowledge files: `knowledge/*.md`
+- Claude skills: `.claude/skills/*/SKILL.md`
+
 ## Data Directories
 
 | Path | Purpose |

@@ -90,12 +90,14 @@ Orion is a 100% offline, local Brazilian Portuguese voice assistant for Ubuntu (
 | VAD | torch (Silero model via torch.hub) | WakeWordDetector, SpeechRecognizer |
 | audio_utils | scipy, noisereduce, numpy | SpeechRecognizer, WakeWordDetector |
 | FaceAnimator | threading, sys, math | VoiceAssistant |
+| Web Settings Panel | flask | run_web.py (standalone) |
 
 ## File Structure
 
 ```
 orion/
 ├── main.py                     # Entry point: banner, signal handling, starts VoiceAssistant
+├── run_web.py                  # Web settings panel launcher
 ├── requirements.txt            # Python dependencies
 ├── install.sh                  # Complete system installation (6 stages)
 ├── start.sh                    # Launcher: CUDA setup, venv, ollama check
@@ -118,7 +120,18 @@ orion/
     ├── tts.py                  # Multi-backend TTS
     ├── vad.py                  # Silero VAD wrapper
     ├── audio_utils.py          # Bandpass filter + noise reduction
-    └── face.py                 # Terminal ASCII face animator
+    ├── face.py                 # Terminal ASCII face animator
+    └── web/                   # Web settings panel
+        ├── __init__.py
+        ├── app.py              # Flask app, routes, API
+        ├── templates/          # Jinja2 HTML templates
+        │   ├── base.html       # Layout with sidebar nav
+        │   ├── index.html      # Dashboard
+        │   ├── knowledge_list.html
+        │   ├── knowledge_edit.html
+        │   └── settings.html
+        └── static/
+            └── style.css
 ```
 
 ## Startup Flow

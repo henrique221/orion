@@ -13,6 +13,7 @@
 | coqui-tts | 0.27.5 | XTTS v2 TTS model |
 | torch | >=2.6.0 | PyTorch (CUDA index: cu124) |
 | torchaudio | >=2.6.0 | Audio utilities for PyTorch |
+| flask | >=3.0.0 | Web settings panel (UI) |
 
 **Note**: torch/torchaudio installed from CUDA 12.4 index: `https://download.pytorch.org/whl/cu124`
 

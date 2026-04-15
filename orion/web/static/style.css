@@ -1,0 +1,72 @@
+/* Orion Web UI — Custom styles */
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgb(17 24 39);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgb(55 65 81);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(75 85 99);
+}
+
+/* Editor textarea */
+#editor-textarea {
+    tab-size: 4;
+    -moz-tab-size: 4;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+    line-height: 1.6;
+}
+
+/* Prose overrides for markdown preview */
+.prose {
+    --tw-prose-body: rgb(209 213 219);
+    --tw-prose-headings: rgb(243 244 246);
+    --tw-prose-links: rgb(96 165 250);
+    --tw-prose-code: rgb(167 139 250);
+    --tw-prose-pre-bg: rgb(17 24 39);
+}
+
+.prose h1, .prose h2, .prose h3 {
+    border-bottom: 1px solid rgb(55 65 81);
+    padding-bottom: 0.3em;
+}
+
+.prose table {
+    width: 100%;
+}
+
+.prose th, .prose td {
+    border: 1px solid rgb(55 65 81);
+    padding: 0.5em 0.75em;
+}
+
+.prose th {
+    background: rgb(31 41 55);
+}
+
+.prose code:not(pre code) {
+    background: rgb(31 41 55);
+    padding: 0.15em 0.4em;
+    border-radius: 0.25em;
+    font-size: 0.875em;
+}
+
+.prose pre {
+    border: 1px solid rgb(55 65 81);
+    border-radius: 0.5rem;
+}
+
+/* Transition for nav links */
+.nav-link {
+    transition: all 0.15s ease;
+}
